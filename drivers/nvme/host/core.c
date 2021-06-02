@@ -341,6 +341,7 @@ bool nvme_cancel_request(struct request *req, void *data, bool reserved)
 		return true;
 
 	nvme_req(req)->status = NVME_SC_HOST_ABORTED_CMD;
+	nvme_req(req)->flags |= NVME_REQ_CANCELLED;
 	blk_mq_force_complete_rq(req);
 	return true;
 }
@@ -419,6 +420,16 @@ bool nvme_change_ctrl_state(struct nvme_ctrl *ctrl,
 			break;
 		}
 		break;
+	case NVME_CTRL_DELETING_NOIO:
+		switch (old_state) {
+		case NVME_CTRL_DELETING:
+		case NVME_CTRL_DEAD:
+			changed = true;
+			/* FALLTHRU */
+		default:
+			break;
+		}
+		break;
 	case NVME_CTRL_DEAD:
 		switch (old_state) {
 		case NVME_CTRL_DELETING:
@@ -465,6 +476,7 @@ static bool nvme_state_terminal(struct nvme_ctrl *ctrl)
 	case NVME_CTRL_CONNECTING:
 		return false;
 	case NVME_CTRL_DELETING:
+	case NVME_CTRL_DELETING_NOIO:
 	case NVME_CTRL_DEAD:
 		return true;
 	default:
@@ -1877,11 +1889,11 @@ static int nvme_revalidate_disk(struct gendisk *disk)
 	struct nvme_ctrl *ctrl = ns->ctrl;
 	struct nvme_id_ns *id;
 	struct nvme_ns_ids ids;
-	int ret = 0;
+	int ret = NVME_SC_INVALID_NS | NVME_SC_DNR;
 
 	if (test_bit(NVME_NS_DEAD, &ns->flags)) {
 		set_capacity(disk, 0);
-		return -ENODEV;
+		goto out;
 	}
 
 	ret = nvme_identify_ns(ctrl, ns->head->ns_id, &id);
@@ -1889,7 +1901,7 @@ static int nvme_revalidate_disk(struct gendisk *disk)
 		goto out;
 
 	if (id->ncap == 0) {
-		ret = -ENODEV;
+		ret = NVME_SC_INVALID_NS | NVME_SC_DNR;
 		goto free_id;
 	}
 
@@ -1900,7 +1912,7 @@ static int nvme_revalidate_disk(struct gendisk *disk)
 	if (!nvme_ns_ids_equal(&ns->head->ids, &ids)) {
 		dev_err(ctrl->device,
 			"identifiers changed for nsid %d\n", ns->head->ns_id);
-		ret = -ENODEV;
+		ret = NVME_SC_INVALID_NS | NVME_SC_DNR;
 		goto free_id;
 	}
 
@@ -1909,13 +1921,17 @@ free_id:
 	kfree(id);
 out:
 	/*
-	 * Only fail the function if we got a fatal error back from the
+	 * Only remove the namespace if we got a fatal error back from the
 	 * device, otherwise ignore the error and just move on.
+	 *
+	 * TODO: we should probably schedule a delayed retry here.
 	 */
-	if (ret == -ENOMEM || (ret > 0 && !(ret & NVME_SC_DNR)))
-		ret = 0;
-	else if (ret > 0)
-		ret = blk_status_to_errno(nvme_error_status(ret));
+	if (ret > 0) {
+		if (ret & NVME_SC_DNR)
+			ret = blk_status_to_errno(nvme_error_status(ret));
+		else
+			ret = 0;
+	}
 	return ret;
 }
 
@@ -3235,6 +3251,7 @@ static ssize_t nvme_sysfs_show_state(struct device *dev,
 		[NVME_CTRL_RESETTING]	= "resetting",
 		[NVME_CTRL_CONNECTING]	= "connecting",
 		[NVME_CTRL_DELETING]	= "deleting",
+		[NVME_CTRL_DELETING_NOIO]= "deleting (no IO)",
 		[NVME_CTRL_DEAD]	= "dead",
 	};
 
@@ -3867,6 +3884,9 @@ void nvme_remove_namespaces(struct nvme_ctrl *ctrl)
 	 */
 	if (ctrl->state == NVME_CTRL_DEAD)
 		nvme_kill_queues(ctrl);
+
+	/* this is a no-op when called from the controller reset handler */
+	nvme_change_ctrl_state(ctrl, NVME_CTRL_DELETING_NOIO);
 
 	down_write(&ctrl->namespaces_rwsem);
 	list_splice_init(&ctrl->namespaces, &ns_list);
