@@ -176,12 +176,32 @@ static inline u16 nvme_req_qid(struct request *req)
  */
 #define NVME_QUIRK_DELAY_AMOUNT		2300
 
+/*
+ * enum nvme_ctrl_state: Controller state
+ *
+ * @NVME_CTRL_NEW:		New controller just allocated, initial state
+ * @NVME_CTRL_LIVE:		Controller is connected and I/O capable
+ * @NVME_CTRL_RESETTING:	Controller is resetting (or scheduled reset)
+ * @NVME_CTRL_CONNECTING:	Controller is disconnected, now connecting the
+ *				transport
+ * @NVME_CTRL_DELETING:		Controller is deleting (or scheduled deletion)
+ * @NVME_CTRL_DELETING_NOIO:	Controller is deleting and I/O is not
+ *				disabled/failed immediately. This state comes
+ * 				after all async event processing took place and
+ * 				before ns removal and the controller deletion
+ * 				progress
+ * @NVME_CTRL_DEAD:		Controller is non-present/unresponsive during
+ *				shutdown or removal. In this case we forcibly
+ *				kill all inflight I/O as they have no chance to
+ *				complete
+ */
 enum nvme_ctrl_state {
 	NVME_CTRL_NEW,
 	NVME_CTRL_LIVE,
 	NVME_CTRL_RESETTING,
 	NVME_CTRL_CONNECTING,
 	NVME_CTRL_DELETING,
+	NVME_CTRL_DELETING_NOIO,
 	NVME_CTRL_DEAD,
 };
 
@@ -580,7 +600,8 @@ void nvme_kick_requeue_lists(struct nvme_ctrl *ctrl);
 int nvme_mpath_alloc_disk(struct nvme_ctrl *ctrl,struct nvme_ns_head *head);
 void nvme_mpath_add_disk(struct nvme_ns *ns, struct nvme_id_ns *id);
 void nvme_mpath_remove_disk(struct nvme_ns_head *head);
-int nvme_mpath_init(struct nvme_ctrl *ctrl, struct nvme_id_ctrl *id);
+int nvme_mpath_init_identify(struct nvme_ctrl *ctrl, struct nvme_id_ctrl *id);
+void nvme_mpath_init_ctrl(struct nvme_ctrl *ctrl);
 void nvme_mpath_uninit(struct nvme_ctrl *ctrl);
 void nvme_mpath_stop(struct nvme_ctrl *ctrl);
 bool nvme_mpath_clear_current_path(struct nvme_ns *ns);
@@ -603,6 +624,16 @@ static inline void nvme_trace_bio_complete(struct request *req,
 	if (req->cmd_flags & REQ_NVME_MPATH)
 		trace_block_bio_complete(ns->head->disk->queue,
 					 req->bio, status);
+}
+
+static inline void nvme_mpath_update_disk_size(struct gendisk *disk)
+{
+	struct block_device *bdev = bdget_disk(disk, 0);
+
+	if (bdev) {
+		bd_set_size(bdev, get_capacity(disk) << SECTOR_SHIFT);
+		bdput(bdev);
+	}
 }
 
 extern struct device_attribute dev_attr_ana_grpid;
@@ -657,7 +688,10 @@ static inline void nvme_trace_bio_complete(struct request *req,
         blk_status_t status)
 {
 }
-static inline int nvme_mpath_init(struct nvme_ctrl *ctrl,
+static inline void nvme_mpath_init_ctrl(struct nvme_ctrl *ctrl)
+{
+}
+static inline int nvme_mpath_init_identify(struct nvme_ctrl *ctrl,
 		struct nvme_id_ctrl *id)
 {
 	if (ctrl->subsys->cmic & (1 << 3))
@@ -678,6 +712,9 @@ static inline void nvme_mpath_wait_freeze(struct nvme_subsystem *subsys)
 {
 }
 static inline void nvme_mpath_start_freeze(struct nvme_subsystem *subsys)
+{
+}
+static inline void nvme_mpath_update_disk_size(struct gendisk *disk)
 {
 }
 #endif /* CONFIG_NVME_MULTIPATH */
