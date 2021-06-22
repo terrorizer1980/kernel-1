@@ -152,7 +152,12 @@ static struct xfrm_policy_afinfo const __rcu *xfrm_policy_afinfo[AF_INET6 + 1]
 						__read_mostly;
 
 static struct kmem_cache *xfrm_dst_cache __ro_after_init;
+#ifdef CONFIG_PREEMPT_RT
+static DEFINE_SPINLOCK(xfrm_policy_hash_generation_lock);
+static __read_mostly seqcount_spinlock_t xfrm_policy_hash_generation;
+#else
 static __read_mostly seqcount_mutex_t xfrm_policy_hash_generation;
+#endif
 
 static struct rhashtable xfrm_policy_inexact_table;
 static const struct rhashtable_params xfrm_pol_inexact_params;
@@ -580,6 +585,9 @@ static void xfrm_bydst_resize(struct net *net, int dir)
 		return;
 
 	spin_lock_bh(&net->xfrm.xfrm_policy_lock);
+#ifdef CONFIG_PREEMPT_RT
+	spin_lock(&xfrm_policy_hash_generation_lock);
+#endif
 	write_seqcount_begin(&xfrm_policy_hash_generation);
 
 	odst = rcu_dereference_protected(net->xfrm.policy_bydst[dir].table,
@@ -592,6 +600,9 @@ static void xfrm_bydst_resize(struct net *net, int dir)
 	net->xfrm.policy_bydst[dir].hmask = nhashmask;
 
 	write_seqcount_end(&xfrm_policy_hash_generation);
+#ifdef CONFIG_PREEMPT_RT
+	spin_unlock(&xfrm_policy_hash_generation_lock);
+#endif
 	spin_unlock_bh(&net->xfrm.xfrm_policy_lock);
 
 	synchronize_rcu();
@@ -1230,6 +1241,9 @@ static void xfrm_hash_rebuild(struct work_struct *work)
 	} while (read_seqretry(&net->xfrm.policy_hthresh.lock, seq));
 
 	spin_lock_bh(&net->xfrm.xfrm_policy_lock);
+#ifdef CONFIG_PREEMPT_RT
+	spin_lock(&xfrm_policy_hash_generation_lock);
+#endif
 	write_seqcount_begin(&xfrm_policy_hash_generation);
 
 	/* make sure that we can insert the indirect policies again before
@@ -1340,6 +1354,9 @@ static void xfrm_hash_rebuild(struct work_struct *work)
 out_unlock:
 	__xfrm_policy_inexact_flush(net);
 	write_seqcount_end(&xfrm_policy_hash_generation);
+#ifdef CONFIG_PREEMPT_RT
+	spin_unlock(&xfrm_policy_hash_generation_lock);
+#endif
 	spin_unlock_bh(&net->xfrm.xfrm_policy_lock);
 
 	mutex_unlock(&hash_resize_mutex);
@@ -4149,7 +4166,11 @@ void __init xfrm_init(void)
 {
 	register_pernet_subsys(&xfrm_net_ops);
 	xfrm_dev_init();
+#ifdef CONFIG_PREEMPT_RT
+	seqcount_spinlock_init(&xfrm_policy_hash_generation, &xfrm_policy_hash_generation_lock);
+#else
 	seqcount_mutex_init(&xfrm_policy_hash_generation, &hash_resize_mutex);
+#endif
 	xfrm_input_init();
 
 	RCU_INIT_POINTER(xfrm_if_cb, NULL);
