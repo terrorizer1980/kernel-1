@@ -774,6 +774,9 @@ struct TCP_Server_Info {
 	 * reconnect.
 	 */
 	int nr_targets;
+#ifdef CONFIG_CIFS_DFS_UPCALL
+	bool is_dfs_conn; /* if a dfs connection */
+#endif
 };
 
 struct cifs_credits {
