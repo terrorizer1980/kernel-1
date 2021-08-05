@@ -103,20 +103,10 @@ struct rpc_rqst {
 							 * used in the softirq.
 							 */
 	unsigned long		rq_majortimeo;	/* major timeout alarm */
-#ifdef __GENKSYMS__
-	unsigned long		rq_timeout;	/* Current timeout value */
-#else
 	unsigned long		rq_minortimeo;	/* minor timeout alarm */
-#endif
+	unsigned long		rq_timeout;	/* Current timeout value */
 	ktime_t			rq_rtt;		/* round-trip time */
-#ifdef __GENKSYMS__
 	unsigned int		rq_retries;	/* # of retries */
-#else
-	unsigned int		rq_retries:8;	/* # of retries */
-	unsigned int		rq_timeout:24;	/* Current timeout value -
-						 * Upto a few minutes in jiffies
-						 */
-#endif
 	unsigned int		rq_connect_cookie;
 						/* A cookie used to track the
 						   state of the transport
@@ -218,16 +208,8 @@ struct rpc_xprt {
 	unsigned int		min_reqs;	/* min number of slots */
 	unsigned int		num_reqs;	/* total slots */
 	unsigned long		state;		/* transport state */
-#ifndef __GENKSYMS__
 	unsigned char		resvport   : 1,	/* use a reserved port */
 				reuseport  : 1; /* reuse port on reconnect */
-#else
-/* For kabi checks, hide reuseport which will be placed in an unused bit,
- * and #define it to resvport so that code can build.
- */
-	unsigned char		resvport   : 1;	/* use a reserved port */
-#define reuseport resvport
-#endif
 	atomic_t		swapper;	/* we're swapping over this
 						   transport */
 	unsigned int		bind_index;	/* bind function index */
