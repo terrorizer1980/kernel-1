@@ -321,6 +321,9 @@ struct kvm_vcpu {
 	bool ready;
 	struct kvm_vcpu_arch arch;
 	struct dentry *debugfs_dentry;
+#ifndef __GENKSYMS__
+	unsigned long cr3_lm_rsvd_bits;
+#endif
 };
 
 static inline int kvm_vcpu_exiting_guest_mode(struct kvm_vcpu *vcpu)
@@ -1268,7 +1271,11 @@ extern unsigned int halt_poll_ns_grow_start;
 extern unsigned int halt_poll_ns_shrink;
 
 struct kvm_device {
+ #ifndef __GENKSYMS__
 	const struct kvm_device_ops *ops;
+#else
+	struct kvm_device_ops *ops;
+#endif
 	struct kvm *kvm;
 	void *private;
 	struct list_head vm_node;
