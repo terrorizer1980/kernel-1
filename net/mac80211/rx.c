@@ -2205,7 +2205,7 @@ ieee80211_rx_h_defragment(struct ieee80211_rx_data *rx)
 	}
 
 	if (rx->sta)
-		cache = &sta_frags(rx->sta);
+		cache = &rx->sta->frags;
 
 	if (likely(!ieee80211_has_morefrags(fc) && frag == 0))
 		goto out;
