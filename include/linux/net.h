@@ -21,9 +21,7 @@
 #include <linux/rcupdate.h>
 #include <linux/once.h>
 #include <linux/fs.h>
-#ifndef __GENKSYMS__
 #include <linux/mm.h>
-#endif
 
 #include <uapi/linux/net.h>
 

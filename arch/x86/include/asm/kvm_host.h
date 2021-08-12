@@ -657,6 +657,7 @@ struct kvm_vcpu_arch {
 	int cpuid_nent;
 	struct kvm_cpuid_entry2 cpuid_entries[KVM_MAX_CPUID_ENTRIES];
 
+	unsigned long cr3_lm_rsvd_bits;
 	int maxphyaddr;
 
 	/* emulate context */
@@ -1083,6 +1084,7 @@ struct kvm_x86_ops {
 	void (*run)(struct kvm_vcpu *vcpu);
 	int (*handle_exit)(struct kvm_vcpu *vcpu);
 	void (*skip_emulated_instruction)(struct kvm_vcpu *vcpu);
+	void (*update_emulated_instruction)(struct kvm_vcpu *vcpu);
 	void (*set_interrupt_shadow)(struct kvm_vcpu *vcpu, int mask);
 	u32 (*get_interrupt_shadow)(struct kvm_vcpu *vcpu);
 	void (*patch_hypercall)(struct kvm_vcpu *vcpu,
@@ -1138,7 +1140,7 @@ struct kvm_x86_ops {
 	bool (*pt_supported)(void);
 	bool (*pku_supported)(void);
 
-	int (*check_nested_events)(struct kvm_vcpu *vcpu, bool __unused);
+	int (*check_nested_events)(struct kvm_vcpu *vcpu);
 	void (*request_immediate_exit)(struct kvm_vcpu *vcpu);
 
 	void (*sched_in)(struct kvm_vcpu *kvm, int cpu);
@@ -1223,10 +1225,6 @@ struct kvm_x86_ops {
 
 	bool (*need_emulation_on_page_fault)(struct kvm_vcpu *vcpu);
 	int (*enable_direct_tlbflush)(struct kvm_vcpu *vcpu);
-
-#ifndef __GENKSYMS__
-	void (*update_emulated_instruction)(struct kvm_vcpu *vcpu);
-#endif
 };
 
 struct kvm_arch_async_pf {
