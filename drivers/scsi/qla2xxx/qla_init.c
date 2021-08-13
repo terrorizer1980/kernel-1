@@ -1476,6 +1476,9 @@ static int	qla_chk_secure_login(scsi_qla_host_t	*vha, fc_port_t *fcport,
 				    __func__, __LINE__, fcport->port_name);
 				fcport->edif.app_started = 1;
 				fcport->edif.app_sess_online = 1;
+
+				qla_edb_eventcreate(vha, VND_CMD_AUTH_STATE_NEEDED,
+				    fcport->d_id.b24, 0, fcport);
 			}
 
 			rc = 1;
@@ -1535,7 +1538,7 @@ void qla24xx_handle_gpdb_event(scsi_qla_host_t *vha, struct event_arg *ea)
 	case PDS_PLOGI_COMPLETE:
 		if (qla_chk_secure_login(vha, fcport, pd))
 			return;
-		fallthrough;
+		/* fallthrough */
 	case PDS_PLOGI_PENDING:
 	case PDS_PRLI_PENDING:
 	case PDS_PRLI2_PENDING:
