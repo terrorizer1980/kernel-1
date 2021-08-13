@@ -314,10 +314,6 @@ struct pci_dev {
 	u16		aer_cap;	/* AER capability offset */
 	struct aer_stats *aer_stats;	/* AER stats for this device */
 #endif
-#ifdef CONFIG_PCIEPORTBUS
-	struct rcec_ea	*rcec_ea;	/* RCEC cached endpoint association */
-	struct pci_dev  *rcec;          /* Associated RCEC device */
-#endif
 	u8		pcie_cap;	/* PCIe capability offset */
 	u8		msi_cap;	/* MSI capability offset */
 	u8		msix_cap;	/* MSI-X capability offset */
@@ -423,6 +419,8 @@ struct pci_dev {
 	 * mappings to make sure they cannot access arbitrary memory.
 	 */
 	unsigned int	untrusted:1;
+	unsigned int	__aer_firmware_first_valid:1; /* XXX: no longer used, SLE-specific kABI placeholder */
+	unsigned int	__aer_firmware_first:1; /* XXX: no longer used, SLE-specific kABI placeholder */
 	unsigned int	broken_intx_masking:1;	/* INTx masking can't be used */
 	unsigned int	io_window_1k:1;		/* Intel bridge 1K I/O windows */
 	unsigned int	irq_managed:1;
@@ -431,7 +429,9 @@ struct pci_dev {
 	unsigned int	is_probed:1;		/* Device probing in progress */
 	unsigned int	link_active_reporting:1;/* Device capable of reporting link active */
 	unsigned int	no_vf_scan:1;		/* Don't scan for VFs after IOV enablement */
+#ifndef __GENKSYMS__	/* BIT 5 in the second 'unsigned int' of the bitfield, so this is safe */
 	unsigned int	no_command_memory:1;	/* No PCI_COMMAND_MEMORY */
+#endif
 	pci_dev_flags_t dev_flags;
 	atomic_t	enable_cnt;	/* pci_enable_device has been called */
 
@@ -454,11 +454,6 @@ struct pci_dev {
 	const struct attribute_group **msi_irq_groups;
 #endif
 	struct pci_vpd *vpd;
-#ifdef CONFIG_PCIE_DPC
-	u16		dpc_cap;
-	unsigned int	dpc_rp_extensions:1;
-	u8		dpc_rp_log_size;
-#endif
 #ifdef CONFIG_PCI_ATS
 	union {
 		struct pci_sriov	*sriov;		/* PF: SR-IOV info */
@@ -484,6 +479,18 @@ struct pci_dev {
 	void* suse_kabi_padding;
 
 	unsigned long	priv_flags;	/* Private flags for the PCI driver */
+
+#ifdef CONFIG_PCIE_DPC
+#ifndef __GENKSYMS__
+	u16		dpc_cap;
+	unsigned int	dpc_rp_extensions:1;
+	u8		dpc_rp_log_size;
+#ifdef CONFIG_PCIEPORTBUS
+	struct rcec_ea	*rcec_ea;	/* RCEC cached endpoint association */
+	struct pci_dev  *rcec;          /* Associated RCEC device */
+#endif
+#endif /* __GENKSYMS__ */
+#endif
 };
 
 static inline struct pci_dev *pci_physfn(struct pci_dev *dev)
@@ -525,8 +532,11 @@ struct pci_host_bridge {
 	unsigned int	native_shpc_hotplug:1;	/* OS may use SHPC hotplug */
 	unsigned int	native_pme:1;		/* OS may use PCIe PME */
 	unsigned int	native_ltr:1;		/* OS may use PCIe LTR */
-	unsigned int	native_dpc:1;		/* OS may use PCIe DPC */
 	unsigned int	preserve_config:1;	/* Preserve FW resource setup */
+#ifndef __GENKSYMS__
+	/* Safe to leave this bit here - it is bit 8 of a 32 bit field */
+	unsigned int	native_dpc:1;		/* OS may use PCIe DPC */
+#endif
 
 	void* suse_kabi_padding;
 

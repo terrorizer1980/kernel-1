@@ -57,12 +57,14 @@ struct blkcg {
 	struct blkcg_policy_data	*cpd[BLKCG_MAX_POLS];
 
 	struct list_head		all_blkcgs_node;
-#ifdef CONFIG_BLK_CGROUP_FC_APPID
-	char                            fc_app_id[FC_APPID_LEN];
-#endif
 #ifdef CONFIG_CGROUP_WRITEBACK
 	struct list_head		cgwb_list;
 	refcount_t			cgwb_refcnt;
+#endif
+#ifdef CONFIG_BLK_CGROUP_FC_APPID
+#ifndef __GENKSYMS__
+	char                            fc_app_id[FC_APPID_LEN];
+#endif	
 #endif
 };
 
