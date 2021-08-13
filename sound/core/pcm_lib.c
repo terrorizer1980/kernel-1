@@ -1135,12 +1135,11 @@ int snd_pcm_hw_rule_add(struct snd_pcm_runtime *runtime, unsigned int cond,
 	c->private = private;
 	k = 0;
 	while (1) {
-		if (k < ARRAY_SIZE(c->deps)) {
-			c->deps[k++] = dep;
-		} else if (snd_BUG_ON(dep >= 0)) { /* overflow? */
+		if (snd_BUG_ON(k >= ARRAY_SIZE(c->deps))) {
 			va_end(args);
 			return -EINVAL;
 		}
+		c->deps[k++] = dep;
 		if (dep < 0)
 			break;
 		dep = va_arg(args, int);

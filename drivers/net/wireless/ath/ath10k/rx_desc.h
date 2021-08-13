@@ -1282,9 +1282,6 @@ struct fw_rx_desc_base {
 #define FW_RX_DESC_UDP              (1 << 6)
 
 struct fw_rx_desc_hl {
-#ifdef __GENKSYMS__
-	u8 info0;
-#else
 	union {
 		struct {
 		u8 discard:1,
@@ -1297,7 +1294,6 @@ struct fw_rx_desc_hl {
 		} bits;
 		u8 info0;
 	} u;
-#endif
 
 	u8 version;
 	u8 len;
