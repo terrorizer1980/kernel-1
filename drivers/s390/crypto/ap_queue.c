@@ -13,7 +13,9 @@
 #include <asm/facility.h>
 
 #include "ap_bus.h"
+#ifndef __GENKSYMS__
 #include "ap_debug.h"
+#endif
 
 /**
  * ap_queue_enable_interruption(): Enable interruption on an AP queue.
