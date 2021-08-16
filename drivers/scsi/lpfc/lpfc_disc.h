@@ -137,9 +137,10 @@ struct lpfc_nodelist {
 	uint32_t fc4_prli_sent;
 	uint32_t fc4_xpt_flags;
 	uint32_t upcall_flags;
-#define NLP_WAIT_FOR_UNREG    0x1
+#define NLP_XPT_REGD          0x1
 #define SCSI_XPT_REGD         0x2
 #define NVME_XPT_REGD         0x4
+#define NVME_XPT_UNREG_WAIT   0x8	
 #define NLP_WAIT_FOR_LOGO     0x2
 
 
