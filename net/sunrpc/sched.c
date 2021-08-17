@@ -493,8 +493,10 @@ static struct rpc_task *__rpc_find_next_queued_priority(struct rpc_wait_queue *q
 	if (!list_empty(q)) {
 		task = list_entry(q->next, struct rpc_task, u.tk_wait.list);
 		if (queue->owner == task->tk_owner) {
-			if (--queue->nr)
+			if (queue->nr) {
+				queue->nr--;
 				goto out;
+			}
 			list_move_tail(&task->u.tk_wait.list, q);
 		}
 		/*
