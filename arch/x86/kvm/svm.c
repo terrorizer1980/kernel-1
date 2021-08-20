@@ -3381,6 +3381,9 @@ static int nested_svm_vmexit(struct vcpu_svm *svm)
 	nested_vmcb->control.event_inj         = 0;
 	nested_vmcb->control.event_inj_err     = 0;
 
+	/* Don't leak host V_GIF state into L1 hypervisor */
+	nested_vmcb->control.int_ctl &= ~(V_GIF_ENABLE_MASK | V_GIF_MASK);
+
 	/* We always set V_INTR_MASKING and remember the old value in hflags */
 	if (!(svm->vcpu.arch.hflags & HF_VINTR_MASK))
 		nested_vmcb->control.int_ctl &= ~V_INTR_MASKING_MASK;
@@ -3533,7 +3536,7 @@ static void enter_svm_guest_mode(struct vcpu_svm *svm, u64 vmcb_gpa,
 	svm->nested.intercept            = nested_vmcb->control.intercept;
 
 	svm_flush_tlb(&svm->vcpu, true);
-	
+
 	svm->vmcb->control.int_ctl &=
 		        V_INTR_MASKING_MASK | V_GIF_ENABLE_MASK | V_GIF_MASK;
 
