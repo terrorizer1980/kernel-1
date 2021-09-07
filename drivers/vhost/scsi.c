@@ -1438,8 +1438,8 @@ static int vhost_scsi_open(struct inode *inode, struct file *f)
 		vqs[i] = &vs->vqs[i].vq;
 		vs->vqs[i].vq.handle_kick = vhost_scsi_handle_kick;
 	}
-	vhost_dev_init(&vs->dev, vqs, VHOST_SCSI_MAX_VQ,
-		       VHOST_SCSI_WEIGHT, 0);
+	vhost_dev_init_wt(&vs->dev, vqs, VHOST_SCSI_MAX_VQ,
+			  VHOST_SCSI_WEIGHT, 0);
 
 	vhost_scsi_init_inflight(vs, NULL);
 
