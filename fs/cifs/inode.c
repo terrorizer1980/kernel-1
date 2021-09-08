@@ -942,7 +942,7 @@ cifs_get_inode_info(struct inode **inode,
 	cifs_set_fattr_ino(xid, tcon, sb, inode, full_path, data, &fattr);
 
 	/*
-	 * 4. Tweak fattr based on mount options
+	 * 3. Tweak fattr based on mount options
 	 */
 
 handle_mnt_opt:
@@ -986,7 +986,7 @@ handle_mnt_opt:
 	}
 
 	/*
-	 * 5. Update inode with final fattr data
+	 * 4. Update inode with final fattr data
 	 */
 
 	if (!*inode) {
