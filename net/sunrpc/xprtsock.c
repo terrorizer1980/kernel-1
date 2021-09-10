@@ -2260,6 +2260,10 @@ static void xs_tcp_shutdown(struct rpc_xprt *xprt)
 
 	if (sock == NULL)
 		return;
+	if (!xprt->reuseport) {
+		xs_close(xprt);
+		return;
+	}
 	if (xprt_connected(xprt)) {
 		kernel_sock_shutdown(sock, SHUT_RDWR);
 		trace_rpc_socket_shutdown(xprt, sock);
