@@ -67,7 +67,7 @@ struct idxd_desc *idxd_alloc_desc(struct idxd_wq *wq, enum idxd_op_type optype)
 		if (signal_pending_state(TASK_INTERRUPTIBLE, current))
 			break;
 		idx = sbitmap_queue_get(sbq, &cpu);
-		if (idx > 0)
+		if (idx >= 0)
 			break;
 		schedule();
 	}
@@ -148,11 +148,15 @@ int idxd_submit_desc(struct idxd_wq *wq, struct idxd_desc *desc)
 	void __iomem *portal;
 	int rc;
 
-	if (idxd->state != IDXD_DEV_ENABLED)
+	if (idxd->state != IDXD_DEV_ENABLED) {
+		idxd_free_desc(wq, desc);
 		return -EIO;
+	}
 
-	if (!percpu_ref_tryget_live(&wq->wq_active))
+	if (!percpu_ref_tryget_live(&wq->wq_active)) {
+		idxd_free_desc(wq, desc);
 		return -ENXIO;
+	}
 
 	portal = wq->portal;
 
@@ -183,8 +187,12 @@ int idxd_submit_desc(struct idxd_wq *wq, struct idxd_desc *desc)
 		 */
 		rc = enqcmds(portal, desc->hw);
 		if (rc < 0) {
+			percpu_ref_put(&wq->wq_active);
+			/* abort operation frees the descriptor */
 			if (ie)
 				llist_abort_desc(wq, ie, desc);
+			else
+				idxd_free_desc(wq, desc);
 			return rc;
 		}
 	}
