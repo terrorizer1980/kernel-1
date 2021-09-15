@@ -201,6 +201,8 @@ struct irq_data {
  * IRQD_AFFINITY_MANAGED	- Affinity is auto-managed by the kernel
  * IRQD_IRQ_STARTED		- Startup state of the interrupt
  * IRQD_DEFAULT_TRIGGER_SET	- Expected trigger already been set
+ * IRQD_MSI_NOMASK_QUIRK	- Non-maskable MSI quirk for affinity change
+ *				  required
  */
 enum {
 	IRQD_TRIGGER_MASK		= 0xf,
@@ -220,6 +222,7 @@ enum {
 	IRQD_AFFINITY_MANAGED		= (1 << 21),
 	IRQD_IRQ_STARTED		= (1 << 22),
 	IRQD_DEFAULT_TRIGGER_SET	= (1 << 25),
+	IRQD_MSI_NOMASK_QUIRK		= (1 << 27),
 };
 
 #define __irqd_to_state(d) ACCESS_PRIVATE((d)->common, state_use_accessors)
@@ -348,6 +351,21 @@ static inline void irqd_clr_activated(struct irq_data *d)
 static inline bool irqd_is_started(struct irq_data *d)
 {
 	return __irqd_to_state(d) & IRQD_IRQ_STARTED;
+}
+
+static inline void irqd_set_msi_nomask_quirk(struct irq_data *d)
+{
+	__irqd_to_state(d) |= IRQD_MSI_NOMASK_QUIRK;
+}
+
+static inline void irqd_clr_msi_nomask_quirk(struct irq_data *d)
+{
+	__irqd_to_state(d) &= ~IRQD_MSI_NOMASK_QUIRK;
+}
+
+static inline bool irqd_msi_nomask_quirk(struct irq_data *d)
+{
+	return __irqd_to_state(d) & IRQD_MSI_NOMASK_QUIRK;
 }
 
 #undef __irqd_to_state
