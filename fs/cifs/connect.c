@@ -2450,9 +2450,9 @@ cifs_parse_mount_err:
 	return 1;
 }
 
-/** Returns true if srcaddr isn't specified and rhs isn't
- * specified, or if srcaddr is specified and
- * matches the IP address of the rhs argument.
+/**
+ * Returns true if srcaddr isn't specified and rhs isn't specified, or
+ * if srcaddr is specified and matches the IP address of the rhs argument.
  */
 bool
 cifs_match_ipaddr(struct sockaddr *srcaddr, struct sockaddr *rhs)
@@ -3938,7 +3938,8 @@ ip_connect(struct TCP_Server_Info *server)
 void reset_cifs_unix_caps(unsigned int xid, struct cifs_tcon *tcon,
 			  struct cifs_sb_info *cifs_sb, struct smb_vol *vol_info)
 {
-	/* if we are reconnecting then should we check to see if
+	/*
+	 * If we are reconnecting then should we check to see if
 	 * any requested capabilities changed locally e.g. via
 	 * remount but we can not do much about it here
 	 * if they have (even if we could detect it by the following)
@@ -3946,7 +3947,8 @@ void reset_cifs_unix_caps(unsigned int xid, struct cifs_tcon *tcon,
 	 * or if we change to make all sb to same share the same
 	 * sb as NFS - then we only have one backpointer to sb.
 	 * What if we wanted to mount the server share twice once with
-	 * and once without posixacls or posix paths? */
+	 * and once without posixacls or posix paths?
+	 */
 	__u64 saved_cap = le64_to_cpu(tcon->fsUnixInfo.Capability);
 
 	if (vol_info && vol_info->no_linux_ext) {
@@ -3965,11 +3967,15 @@ void reset_cifs_unix_caps(unsigned int xid, struct cifs_tcon *tcon,
 	if (!CIFSSMBQFSUnixInfo(xid, tcon)) {
 		__u64 cap = le64_to_cpu(tcon->fsUnixInfo.Capability);
 		cifs_dbg(FYI, "unix caps which server supports %lld\n", cap);
-		/* check for reconnect case in which we do not
-		   want to change the mount behavior if we can avoid it */
+		/*
+		 * check for reconnect case in which we do not
+		 * want to change the mount behavior if we can avoid it
+		 */
 		if (vol_info == NULL) {
-			/* turn off POSIX ACL and PATHNAMES if not set
-			   originally at mount time */
+			/*
+			 * turn off POSIX ACL and PATHNAMES if not set
+			 * originally at mount time
+			 */
 			if ((saved_cap & CIFS_UNIX_POSIX_ACL_CAP) == 0)
 				cap &= ~CIFS_UNIX_POSIX_ACL_CAP;
 			if ((saved_cap & CIFS_UNIX_POSIX_PATHNAMES_CAP) == 0) {
@@ -4369,7 +4375,6 @@ build_unc_path_to_root(const struct smb_vol *vol,
 
 /**
  * expand_dfs_referral - Perform a dfs referral query and update the cifs_sb
- *
  *
  * If a referral is found, cifs_sb->mountdata will be (re-)allocated
  * to a string containing updated options for the submount.  Otherwise it
