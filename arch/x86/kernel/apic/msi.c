@@ -69,19 +69,7 @@ static void __irq_msi_compose_msg(struct irq_cfg *cfg, struct msi_msg *msg,
 
 static void irq_msi_compose_msg(struct irq_data *data, struct msi_msg *msg)
 {
-	__irq_msi_compose_msg(data, msg, false);
-}
-
-
-/*
- * The Intel IOMMU (ab)uses the high bits of the MSI address to contain the
- * high bits of the destination APIC ID. This can't be done in the general
- * case for MSIs as it would be targeting real memory above 4GiB not the
- * APIC.
- */
-static void dmar_msi_compose_msg(struct irq_data *data, struct msi_msg *msg)
-{
-	__irq_msi_compose_msg(data, msg, true);
+	__irq_msi_compose_msg(irqd_cfg(data), msg, false);
 }
 
 static void irq_msi_update_msg(struct irq_data *irqd, struct irq_cfg *cfg)
@@ -325,6 +313,17 @@ struct irq_domain *arch_create_msi_irq_domain(struct irq_domain *parent)
 static void dmar_msi_write_msg(struct irq_data *data, struct msi_msg *msg)
 {
 	dmar_msi_write(data->irq, msg);
+}
+
+/*
+ * The Intel IOMMU (ab)uses the high bits of the MSI address to contain the
+ * high bits of the destination APIC ID. This can't be done in the general
+ * case for MSIs as it would be targeting real memory above 4GiB not the
+ * APIC.
+ */
+static void dmar_msi_compose_msg(struct irq_data *data, struct msi_msg *msg)
+{
+	__irq_msi_compose_msg(irqd_cfg(data), msg, true);
 }
 
 static struct irq_chip dmar_msi_controller = {
