@@ -4288,8 +4288,18 @@ static int mount_get_conns(struct smb_vol *vol, struct cifs_sb_info *cifs_sb,
 		}
 	}
 
-	cifs_sb->wsize = server->ops->negotiate_wsize(tcon, vol);
-	cifs_sb->rsize = server->ops->negotiate_rsize(tcon, vol);
+
+ 	/*
+ 	 * Clamp the rsize/wsize mount arguments if they are too big for the server
+	 * and set the rsize/wsize to the negotiated values if not passed in by
+	 * the user on mount
+ 	 */
+	if ((cifs_sb->wsize == 0) ||
+	    (cifs_sb->wsize > server->ops->negotiate_wsize(tcon, vol)))
+		cifs_sb->wsize = server->ops->negotiate_wsize(tcon, vol);
+	if ((cifs_sb->rsize == 0) ||
+	    (cifs_sb->rsize > server->ops->negotiate_rsize(tcon, vol)))
+		cifs_sb->rsize = server->ops->negotiate_rsize(tcon, vol);
 
 	return 0;
 }
