@@ -391,7 +391,11 @@ skip_rdma:
 			if (ses->sign)
 				seq_puts(m, " signed");
 
-			seq_puts(m, "\n\tShares:");
+			seq_printf(m, "\n\tUser: %d Cred User: %d",
+				   from_kuid(&init_user_ns, ses->linux_uid),
+				   from_kuid(&init_user_ns, ses->cred_uid));
+
+			seq_puts(m, "\n\n\tShares:");
 			j = 0;
 
 			seq_printf(m, "\n\t%d) IPC: ", j);
