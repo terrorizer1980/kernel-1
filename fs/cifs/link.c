@@ -30,6 +30,7 @@
 #include "cifs_fs_sb.h"
 #include "cifs_unicode.h"
 #include "smb2proto.h"
+#include "cifs_ioctl.h"
 
 /*
  * M-F Symlink Functions - Begin
@@ -517,6 +518,9 @@ cifs_hardlink(struct dentry *old_file, struct inode *inode,
 	struct cifs_tcon *tcon;
 	struct TCP_Server_Info *server;
 	struct cifsInodeInfo *cifsInode;
+
+	if (unlikely(cifs_forced_shutdown(cifs_sb)))
+		return -EIO;
 
 	tlink = cifs_sb_tlink(cifs_sb);
 	if (IS_ERR(tlink))
