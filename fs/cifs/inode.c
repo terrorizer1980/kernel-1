@@ -1987,8 +1987,9 @@ cifs_rename_exit:
 }
 
 static bool
-cifs_inode_needs_reval(struct inode *inode)
+cifs_dentry_needs_reval(struct dentry *dentry)
 {
+	struct inode *inode = d_inode(dentry);
 	struct cifsInodeInfo *cifs_i = CIFS_I(inode);
 	struct cifs_sb_info *cifs_sb = CIFS_SB(inode->i_sb);
 
@@ -2088,10 +2089,10 @@ cifs_zap_mapping(struct inode *inode)
 int cifs_revalidate_file_attr(struct file *filp)
 {
 	int rc = 0;
-	struct inode *inode = file_inode(filp);
+	struct dentry *dentry = file_dentry(filp);
 	struct cifsFileInfo *cfile = (struct cifsFileInfo *) filp->private_data;
 
-	if (!cifs_inode_needs_reval(inode))
+	if (!cifs_dentry_needs_reval(dentry))
 		return rc;
 
 	if (tlink_tcon(cfile->tlink)->unix_ext)
@@ -2114,7 +2115,7 @@ int cifs_revalidate_dentry_attr(struct dentry *dentry)
 	if (inode == NULL)
 		return -ENOENT;
 
-	if (!cifs_inode_needs_reval(inode))
+	if (!cifs_dentry_needs_reval(dentry))
 		return rc;
 
 	xid = get_xid();
