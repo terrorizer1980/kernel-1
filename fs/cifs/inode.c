@@ -1404,7 +1404,7 @@ int cifs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	int rc = 0;
 	unsigned int xid;
-	char *full_path = NULL;
+	const char *full_path = NULL;
 	struct inode *inode = d_inode(dentry);
 	struct cifsInodeInfo *cifs_inode;
 	struct super_block *sb = dir->i_sb;
@@ -1668,7 +1668,7 @@ int cifs_mkdir(struct inode *inode, struct dentry *direntry, umode_t mode)
 	struct tcon_link *tlink;
 	struct cifs_tcon *tcon;
 	struct TCP_Server_Info *server;
-	char *full_path;
+	const char *full_path;
 
 	cifs_dbg(FYI, "In cifs_mkdir, mode = %04ho inode = 0x%p\n",
 		 mode, inode);
@@ -1740,7 +1740,7 @@ int cifs_rmdir(struct inode *inode, struct dentry *direntry)
 	struct tcon_link *tlink;
 	struct cifs_tcon *tcon;
 	struct TCP_Server_Info *server;
-	char *full_path = NULL;
+	const char *full_path = NULL;
 	struct cifsInodeInfo *cifsInode;
 
 	cifs_dbg(FYI, "cifs_rmdir, inode = 0x%p\n", inode);
@@ -1874,8 +1874,8 @@ cifs_rename2(struct inode *source_dir, struct dentry *source_dentry,
 	     struct inode *target_dir, struct dentry *target_dentry,
 	     unsigned int flags)
 {
-	char *from_name = NULL;
-	char *to_name = NULL;
+	const char *from_name = NULL;
+	const char *to_name = NULL;
 	struct cifs_sb_info *cifs_sb;
 	struct tcon_link *tlink;
 	struct cifs_tcon *tcon;
@@ -2108,7 +2108,7 @@ int cifs_revalidate_dentry_attr(struct dentry *dentry)
 	int rc = 0;
 	struct inode *inode = d_inode(dentry);
 	struct super_block *sb = dentry->d_sb;
-	char *full_path = NULL;
+	const char *full_path = NULL;
 	int count = 0;
 
 	if (inode == NULL)
@@ -2402,7 +2402,7 @@ cifs_setattr_unix(struct dentry *direntry, struct iattr *attrs)
 {
 	int rc;
 	unsigned int xid;
-	char *full_path = NULL;
+	const char *full_path = NULL;
 	struct inode *inode = d_inode(direntry);
 	struct cifsInodeInfo *cifsInode = CIFS_I(inode);
 	struct cifs_sb_info *cifs_sb = CIFS_SB(inode->i_sb);
@@ -2553,7 +2553,7 @@ cifs_setattr_nounix(struct dentry *direntry, struct iattr *attrs)
 	struct cifsInodeInfo *cifsInode = CIFS_I(inode);
 	struct cifsFileInfo *wfile;
 	struct cifs_tcon *tcon;
-	char *full_path = NULL;
+	const char *full_path = NULL;
 	int rc = -EACCES;
 	__u32 dosattr = 0;
 	__u64 mode = NO_CHANGE_64;
