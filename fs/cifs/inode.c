@@ -31,6 +31,7 @@
 #include "cifspdu.h"
 #include "cifsglob.h"
 #include "cifsproto.h"
+#include "smb2proto.h"
 #include "cifs_debug.h"
 #include "cifs_fs_sb.h"
 #include "cifs_unicode.h"
@@ -1992,6 +1993,8 @@ cifs_dentry_needs_reval(struct dentry *dentry)
 	struct inode *inode = d_inode(dentry);
 	struct cifsInodeInfo *cifs_i = CIFS_I(inode);
 	struct cifs_sb_info *cifs_sb = CIFS_SB(inode->i_sb);
+	struct cifs_tcon *tcon = cifs_sb_master_tcon(cifs_sb);
+	struct cached_fid *cfid = NULL;
 
 	if (cifs_i->time == 0)
 		return true;
@@ -2001,6 +2004,17 @@ cifs_dentry_needs_reval(struct dentry *dentry)
 
 	if (!lookupCacheEnabled)
 		return true;
+
+	if (!open_cached_dir_by_dentry(tcon, dentry->d_parent, &cfid)) {
+		mutex_lock(&cfid->fid_mutex);
+		if (cfid->time && cifs_i->time > cfid->time) {
+			mutex_unlock(&cfid->fid_mutex);
+			close_cached_dir(cfid);
+			return false;
+		}
+		mutex_unlock(&cfid->fid_mutex);
+		close_cached_dir(cfid);
+	}
 
 	if (!cifs_sb->actimeo)
 		return true;
