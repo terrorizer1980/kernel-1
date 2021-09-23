@@ -2799,6 +2799,11 @@ smbd_connected:
 		goto out_err_crypto_release;
 	}
 	tcp_ses->min_offload = volume_info->min_offload;
+	/*
+	 * at this point we are the only ones with the pointer
+	 * to the struct since the kernel thread not created yet
+	 * no need to spinlock this update of tcpStatus
+	 */
 	tcp_ses->tcpStatus = CifsNeedNegotiate;
 
 	tcp_ses->nr_targets = 1;
