@@ -356,7 +356,9 @@ smb2_negotiate(const unsigned int xid, struct cifs_ses *ses)
 {
 	int rc;
 
+	spin_lock(&GlobalMid_Lock);
 	ses->server->CurrentMid = 0;
+	spin_unlock(&GlobalMid_Lock);
 	rc = SMB2_negotiate(xid, ses);
 	/* BB we probably don't need to retry with modern servers */
 	if (rc == -EAGAIN)
