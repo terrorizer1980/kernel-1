@@ -22,11 +22,6 @@ struct idxd_fault {
 	struct idxd_device *idxd;
 };
 
-static int irq_process_work_list(struct idxd_irq_entry *irq_entry,
-				 int *processed, u64 data);
-static int irq_process_pending_llist(struct idxd_irq_entry *irq_entry,
-				     int *processed, u64 data);
-
 static void idxd_device_reinit(struct work_struct *work)
 {
 	struct idxd_device *idxd = container_of(work, struct idxd_device, work);
@@ -49,7 +44,7 @@ static void idxd_device_reinit(struct work_struct *work)
 			rc = idxd_wq_enable(wq);
 			if (rc < 0) {
 				dev_warn(dev, "Unable to re-enable wq %s\n",
-					 dev_name(&wq->conf_dev));
+					 dev_name(wq_confdev(wq)));
 			}
 		}
 	}
@@ -69,7 +64,7 @@ static int process_misc_interrupts(struct idxd_device *idxd, u32 cause)
 	bool err = false;
 
 	if (cause & IDXD_INTC_ERR) {
-		spin_lock_bh(&idxd->dev_lock);
+		spin_lock(&idxd->dev_lock);
 		for (i = 0; i < 4; i++)
 			idxd->sw_err.bits[i] = ioread64(idxd->reg_base +
 					IDXD_SWERR_OFFSET + i * sizeof(u64));
@@ -94,7 +89,7 @@ static int process_misc_interrupts(struct idxd_device *idxd, u32 cause)
 			}
 		}
 
-		spin_unlock_bh(&idxd->dev_lock);
+		spin_unlock(&idxd->dev_lock);
 		val |= IDXD_INTC_ERR;
 
 		for (i = 0; i < 4; i++)
@@ -138,7 +133,7 @@ static int process_misc_interrupts(struct idxd_device *idxd, u32 cause)
 			INIT_WORK(&idxd->work, idxd_device_reinit);
 			queue_work(idxd->wq, &idxd->work);
 		} else {
-			spin_lock_bh(&idxd->dev_lock);
+			spin_lock(&idxd->dev_lock);
 			idxd_wqs_quiesce(idxd);
 			idxd_wqs_unmap_portal(idxd);
 			idxd_device_clear_state(idxd);
@@ -146,7 +141,7 @@ static int process_misc_interrupts(struct idxd_device *idxd, u32 cause)
 				"idxd halted, need %s.\n",
 				gensts.reset_type == IDXD_DEVICE_RESET_FLR ?
 				"FLR" : "system reset");
-			spin_unlock_bh(&idxd->dev_lock);
+			spin_unlock(&idxd->dev_lock);
 			return -ENXIO;
 		}
 	}
@@ -177,18 +172,14 @@ irqreturn_t idxd_misc_thread(int vec, void *data)
 	return IRQ_HANDLED;
 }
 
-static int irq_process_pending_llist(struct idxd_irq_entry *irq_entry,
-				     int *processed, u64 data)
+static void irq_process_pending_llist(struct idxd_irq_entry *irq_entry)
 {
 	struct idxd_desc *desc, *t;
 	struct llist_node *head;
-	int queued = 0;
-	unsigned long flags;
 
-	*processed = 0;
 	head = llist_del_all(&irq_entry->pending_llist);
 	if (!head)
-		goto out;
+		return;
 
 	llist_for_each_entry_safe(desc, t, head, llnode) {
 		u8 status = desc->completion->status & DSA_COMP_STATUS_MASK;
@@ -200,56 +191,42 @@ static int irq_process_pending_llist(struct idxd_irq_entry *irq_entry,
 			 */
 			if (unlikely(desc->completion->status == IDXD_COMP_DESC_ABORT)) {
 				complete_desc(desc, IDXD_COMPLETE_ABORT);
-				(*processed)++;
 				continue;
 			}
 
 			complete_desc(desc, IDXD_COMPLETE_NORMAL);
-			(*processed)++;
 		} else {
-			spin_lock_irqsave(&irq_entry->list_lock, flags);
+			spin_lock(&irq_entry->list_lock);
 			list_add_tail(&desc->list,
 				      &irq_entry->work_list);
-			spin_unlock_irqrestore(&irq_entry->list_lock, flags);
-			queued++;
+			spin_unlock(&irq_entry->list_lock);
 		}
 	}
-
- out:
-	return queued;
 }
 
-static int irq_process_work_list(struct idxd_irq_entry *irq_entry,
-				 int *processed, u64 data)
+static void irq_process_work_list(struct idxd_irq_entry *irq_entry)
 {
-	int queued = 0;
-	unsigned long flags;
 	LIST_HEAD(flist);
 	struct idxd_desc *desc, *n;
-
-	*processed = 0;
 
 	/*
 	 * This lock protects list corruption from access of list outside of the irq handler
 	 * thread.
 	 */
-	spin_lock_irqsave(&irq_entry->list_lock, flags);
+	spin_lock(&irq_entry->list_lock);
 	if (list_empty(&irq_entry->work_list)) {
-		spin_unlock_irqrestore(&irq_entry->list_lock, flags);
-		return 0;
+		spin_unlock(&irq_entry->list_lock);
+		return;
 	}
 
 	list_for_each_entry_safe(desc, n, &irq_entry->work_list, list) {
 		if (desc->completion->status) {
 			list_del(&desc->list);
-			(*processed)++;
 			list_add_tail(&desc->list, &flist);
-		} else {
-			queued++;
 		}
 	}
 
-	spin_unlock_irqrestore(&irq_entry->list_lock, flags);
+	spin_unlock(&irq_entry->list_lock);
 
 	list_for_each_entry(desc, &flist, list) {
 		/*
@@ -263,13 +240,11 @@ static int irq_process_work_list(struct idxd_irq_entry *irq_entry,
 
 		complete_desc(desc, IDXD_COMPLETE_NORMAL);
 	}
-
-	return queued;
 }
 
-static int idxd_desc_process(struct idxd_irq_entry *irq_entry)
+irqreturn_t idxd_wq_thread(int irq, void *data)
 {
-	int rc, processed, total = 0;
+	struct idxd_irq_entry *irq_entry = data;
 
 	/*
 	 * There are two lists we are processing. The pending_llist is where
@@ -288,29 +263,9 @@ static int idxd_desc_process(struct idxd_irq_entry *irq_entry)
 	 *    and process the completed entries.
 	 * 4. If the entry is still waiting on hardware, list_add_tail() to
 	 *    the work_list.
-	 * 5. Repeat until no more descriptors.
 	 */
-	do {
-		rc = irq_process_work_list(irq_entry, &processed, 0);
-		total += processed;
-		if (rc != 0)
-			continue;
-
-		rc = irq_process_pending_llist(irq_entry, &processed, 0);
-		total += processed;
-	} while (rc != 0);
-
-	return total;
-}
-
-irqreturn_t idxd_wq_thread(int irq, void *data)
-{
-	struct idxd_irq_entry *irq_entry = data;
-	int processed;
-
-	processed = idxd_desc_process(irq_entry);
-	if (processed == 0)
-		return IRQ_NONE;
+	irq_process_work_list(irq_entry);
+	irq_process_pending_llist(irq_entry);
 
 	return IRQ_HANDLED;
 }
