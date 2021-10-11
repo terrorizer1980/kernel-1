@@ -13,6 +13,7 @@ struct msi_msg {
 
 extern int pci_msi_ignore_mask;
 /* Helper functions */
+struct device;
 struct irq_data;
 struct msi_desc;
 struct pci_dev;
