@@ -1400,7 +1400,7 @@ static bool update_mask_by_l2(int cpu, cpumask_var_t *mask)
 	l2_cache = cpu_to_l2cache(cpu);
 	if (!l2_cache || !*mask) {
 		/* Assume only core siblings share cache with this CPU */
-		for_each_cpu(i, submask_fn(cpu))
+		for_each_cpu(i, cpu_sibling_mask(cpu))
 			set_cpus_related(cpu, i, cpu_l2_cache_mask);
 
 		return false;
@@ -1441,6 +1441,8 @@ static void remove_cpu_from_masks(int cpu)
 {
 	struct cpumask *(*mask_fn)(int) = cpu_sibling_mask;
 	int i;
+
+	unmap_cpu_from_node(cpu);
 
 	if (shared_caches)
 		mask_fn = cpu_l2_cache_mask;
@@ -1526,6 +1528,7 @@ static void add_cpu_to_masks(int cpu)
 	 * This CPU will not be in the online mask yet so we need to manually
 	 * add it to it's own thread sibling mask.
 	 */
+	map_cpu_to_node(cpu, cpu_to_node(cpu));
 	cpumask_set_cpu(cpu, cpu_sibling_mask(cpu));
 	cpumask_set_cpu(cpu, cpu_core_mask(cpu));
 
