@@ -236,8 +236,8 @@ static void bpf_jit_emit_func_call(u32 *image, struct codegen_context *ctx, u64 
 	PPC_BPF_LL(12, 12, 0);
 #endif
 
-	PPC_MTLR(12);
-	PPC_BLRL();
+	PPC_MTCTR(12);
+	PPC_BCTRL();
 }
 
 static void bpf_jit_emit_tail_call(u32 *image, struct codegen_context *ctx, u32 out)
