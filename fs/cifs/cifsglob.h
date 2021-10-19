@@ -83,6 +83,9 @@
 #define SMB_ECHO_INTERVAL_MAX 600
 #define SMB_ECHO_INTERVAL_DEFAULT 60
 
+/* dns resolution interval in seconds */
+#define SMB_DNS_RESOLVE_INTERVAL_DEFAULT 600
+
 /* maximum number of PDUs in one compound */
 #define MAX_COMPOUND 5
 
@@ -463,9 +466,9 @@ struct smb_version_operations {
 			const char *, const void *, const __u16,
 			const struct nls_table *, struct cifs_sb_info *);
 	struct cifs_ntsd * (*get_acl)(struct cifs_sb_info *, struct inode *,
-			const char *, u32 *);
+			const char *, u32 *, u32);
 	struct cifs_ntsd * (*get_acl_by_fid)(struct cifs_sb_info *,
-			const struct cifs_fid *, u32 *);
+			const struct cifs_fid *, u32 *, u32);
 	int (*set_acl)(struct cifs_ntsd *, __u32, struct inode *, const char *,
 			int);
 	/* writepages retry size */
@@ -501,7 +504,7 @@ struct smb_version_operations {
 			 struct inode *inode,
 			 struct dentry *dentry,
 			 struct cifs_tcon *tcon,
-			 char *full_path,
+			 const char *full_path,
 			 umode_t mode,
 			 dev_t device_number);
 	/* version specific fiemap implementation */
@@ -509,6 +512,10 @@ struct smb_version_operations {
 		      struct fiemap_extent_info *, u64, u64);
 	/* version specific llseek implementation */
 	loff_t (*llseek)(struct file *, struct cifs_tcon *, loff_t, int);
+	/* Check for STATUS_IO_TIMEOUT */
+	bool (*is_status_io_timeout)(char *buf);
+	/* Check for STATUS_NETWORK_NAME_DELETED */
+	void (*is_network_name_deleted)(char *buf, struct TCP_Server_Info *srv);
 };
 
 struct smb_version_values {
@@ -561,6 +568,7 @@ struct smb_vol {
 	bool override_gid:1;
 	bool dynperm:1;
 	bool noperm:1;
+	bool nodelete:1;
 	bool mode_ace:1;
 	bool no_psx_acl:1; /* set if posix acl support should be disabled */
 	bool cifs_acl:1;
@@ -671,6 +679,7 @@ struct TCP_Server_Info {
 	char server_RFC1001_name[RFC1001_NAME_LEN_WITH_NULL];
 	struct smb_version_operations	*ops;
 	struct smb_version_values	*vals;
+	/* updates to tcpStatus protected by GlobalMid_Lock */
 	enum statusEnum tcpStatus; /* what we think the status is */
 	char *hostname; /* hostname portion of UNC string */
 	struct socket *ssocket;
@@ -715,7 +724,7 @@ struct TCP_Server_Info {
 	/* SMB_COM_WRITE_RAW or SMB_COM_READ_RAW. */
 	unsigned int capabilities; /* selective disabling of caps by smb sess */
 	int timeAdj;  /* Adjust for difference in server time zone in sec */
-	__u64 CurrentMid;         /* multiplex id - rotating counter */
+	__u64 CurrentMid;         /* multiplex id - rotating counter, protected by GlobalMid_Lock */
 	char cryptkey[CIFS_CRYPTO_KEY_SIZE]; /* used by ntlm, ntlmv2 etc */
 	/* 16th byte of RFC1001 workstation name is always null */
 	char workstation_RFC1001_name[RFC1001_NAME_LEN_WITH_NULL];
@@ -739,6 +748,7 @@ struct TCP_Server_Info {
 	/* point to the SMBD connection if RDMA is used instead of socket */
 	struct smbd_connection *smbd_conn;
 	struct delayed_work	echo; /* echo ping workqueue job */
+	struct delayed_work	resolve; /* dns resolution workqueue job */
 	char	*smallbuf;	/* pointer to current "small" buffer */
 	char	*bigbuf;	/* pointer to current "big" buffer */
 	/* Total size of this PDU. Only valid from cifs_demultiplex_thread */
@@ -973,7 +983,7 @@ struct cifs_ses {
 	struct mutex session_mutex;
 	struct TCP_Server_Info *server;	/* pointer to server info */
 	int ses_count;		/* reference counter */
-	enum statusEnum status;
+	enum statusEnum status;  /* updates protected by GlobalMid_Lock */
 	unsigned overrideSecFlg;  /* if non-zero override global sec flags */
 	char *serverOS;		/* name of operating system underlying server */
 	char *serverNOS;	/* name of network operating system of server */
@@ -1024,10 +1034,12 @@ struct cached_fid {
 	bool is_valid:1;	/* Do we have a useable root fid */
 	bool file_all_info_is_valid:1;
 	bool has_lease:1;
+	unsigned long time; /* jiffies of when lease was taken */
 	struct kref refcount;
 	struct cifs_fid *fid;
 	struct mutex fid_mutex;
 	struct cifs_tcon *tcon;
+	struct dentry *dentry;
 	struct work_struct lease_break;
 	struct smb2_file_all_info file_all_info;
 };
@@ -1093,6 +1105,7 @@ struct cifs_tcon {
 	bool retry:1;
 	bool nocase:1;
 	bool nohandlecache:1; /* if strange server resource prob can turn off */
+	bool nodelete:1;
 	bool seal:1;      /* transport encryption for this mounted share */
 	bool unix_ext:1;  /* if false disable Linux extensions to CIFS protocol
 				for this mount even if server would support */
@@ -1812,6 +1825,9 @@ require use of the stronger protocol */
  *  GlobalMid_Lock protects:
  *	list operations on pending_mid_q and oplockQ
  *      updates to XID counters, multiplex id  and SMB sequence numbers
+ *      list operations on global DnotifyReqList
+ *      updates to ses->status and TCP_Server_Info->tcpStatus
+ *      updates to server->CurrentMid
  *  tcp_ses_lock protects:
  *	list operations on tcp and SMB session lists
  *  tcon->open_file_lock protects the list of open files hanging off the tcon
@@ -1858,13 +1874,6 @@ GLOBAL_EXTERN struct list_head		cifs_tcp_ses_list;
  */
 GLOBAL_EXTERN spinlock_t		cifs_tcp_ses_lock;
 
-#ifdef CONFIG_CIFS_DNOTIFY_EXPERIMENTAL /* unused temporarily */
-/* Outstanding dir notify requests */
-GLOBAL_EXTERN struct list_head GlobalDnotifyReqList;
-/* DirNotify response queue */
-GLOBAL_EXTERN struct list_head GlobalDnotifyRsp_Q;
-#endif /* was needed for dnotify, and will be needed for inotify when VFS fix */
-
 /*
  * Global transaction id (XID) information
  */
@@ -1905,19 +1914,9 @@ extern unsigned int cifs_min_small;  /* min size of small buf pool */
 extern unsigned int cifs_max_pending; /* MAX requests at once to server*/
 extern bool disable_legacy_dialects;  /* forbid vers=1.0 and vers=2.0 mounts */
 
-GLOBAL_EXTERN struct rb_root uidtree;
-GLOBAL_EXTERN struct rb_root gidtree;
-GLOBAL_EXTERN spinlock_t siduidlock;
-GLOBAL_EXTERN spinlock_t sidgidlock;
-GLOBAL_EXTERN struct rb_root siduidtree;
-GLOBAL_EXTERN struct rb_root sidgidtree;
-GLOBAL_EXTERN spinlock_t uidsidlock;
-GLOBAL_EXTERN spinlock_t gidsidlock;
-
 void cifs_oplock_break(struct work_struct *work);
 void cifs_queue_oplock_break(struct cifsFileInfo *cfile);
 
-extern const struct slow_work_ops cifs_oplock_break_ops;
 extern struct workqueue_struct *cifsiod_wq;
 extern struct workqueue_struct *fileinfo_put_wq;
 extern struct workqueue_struct *decrypt_wq;
@@ -1951,6 +1950,24 @@ extern struct smb_version_values smb302_values;
 #define ALT_SMB311_VERSION_STRING "3.11"
 extern struct smb_version_operations smb311_operations;
 extern struct smb_version_values smb311_values;
+
+static inline char *get_security_type_str(enum securityEnum sectype)
+{
+	switch (sectype) {
+	case RawNTLMSSP:
+		return "RawNTLMSSP";
+	case Kerberos:
+		return "Kerberos";
+	case NTLMv2:
+		return "NTLMv2";
+	case NTLM:
+		return "NTLM";
+	case LANMAN:
+		return "LANMAN";
+	default:
+		return "Unknown";
+	}
+}
 
 static inline bool is_smb1_server(struct TCP_Server_Info *server)
 {
