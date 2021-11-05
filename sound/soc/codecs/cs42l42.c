@@ -41,7 +41,6 @@
 static const struct reg_default cs42l42_reg_defaults[] = {
 	{ CS42L42_FRZ_CTL,			0x00 },
 	{ CS42L42_SRC_CTL,			0x10 },
-	{ CS42L42_MCLK_STATUS,			0x02 },
 	{ CS42L42_MCLK_CTL,			0x02 },
 	{ CS42L42_SFTRAMP_RATE,			0xA4 },
 	{ CS42L42_I2C_DEBOUNCE,			0x88 },
@@ -57,11 +56,9 @@ static const struct reg_default cs42l42_reg_defaults[] = {
 	{ CS42L42_RSENSE_CTL3,			0x1B },
 	{ CS42L42_TSENSE_CTL,			0x1B },
 	{ CS42L42_TSRS_INT_DISABLE,		0x00 },
-	{ CS42L42_TRSENSE_STATUS,		0x00 },
 	{ CS42L42_HSDET_CTL1,			0x77 },
 	{ CS42L42_HSDET_CTL2,			0x00 },
 	{ CS42L42_HS_SWITCH_CTL,		0xF3 },
-	{ CS42L42_HS_DET_STATUS,		0x00 },
 	{ CS42L42_HS_CLAMP_DISABLE,		0x00 },
 	{ CS42L42_MCLK_SRC_SEL,			0x00 },
 	{ CS42L42_SPDIF_CLK_CFG,		0x00 },
@@ -75,25 +72,13 @@ static const struct reg_default cs42l42_reg_defaults[] = {
 	{ CS42L42_IN_ASRC_CLK,			0x00 },
 	{ CS42L42_OUT_ASRC_CLK,			0x00 },
 	{ CS42L42_PLL_DIV_CFG1,			0x00 },
-	{ CS42L42_ADC_OVFL_STATUS,		0x00 },
-	{ CS42L42_MIXER_STATUS,			0x00 },
-	{ CS42L42_SRC_STATUS,			0x00 },
-	{ CS42L42_ASP_RX_STATUS,		0x00 },
-	{ CS42L42_ASP_TX_STATUS,		0x00 },
-	{ CS42L42_CODEC_STATUS,			0x00 },
-	{ CS42L42_DET_INT_STATUS1,		0x00 },
-	{ CS42L42_DET_INT_STATUS2,		0x00 },
-	{ CS42L42_SRCPL_INT_STATUS,		0x00 },
-	{ CS42L42_VPMON_STATUS,			0x00 },
-	{ CS42L42_PLL_LOCK_STATUS,		0x00 },
-	{ CS42L42_TSRS_PLUG_STATUS,		0x00 },
 	{ CS42L42_ADC_OVFL_INT_MASK,		0x01 },
 	{ CS42L42_MIXER_INT_MASK,		0x0F },
 	{ CS42L42_SRC_INT_MASK,			0x0F },
 	{ CS42L42_ASP_RX_INT_MASK,		0x1F },
 	{ CS42L42_ASP_TX_INT_MASK,		0x0F },
 	{ CS42L42_CODEC_INT_MASK,		0x03 },
-	{ CS42L42_SRCPL_INT_MASK,		0xFF },
+	{ CS42L42_SRCPL_INT_MASK,		0x7F },
 	{ CS42L42_VPMON_INT_MASK,		0x01 },
 	{ CS42L42_PLL_LOCK_INT_MASK,		0x01 },
 	{ CS42L42_TSRS_PLUG_INT_MASK,		0x0F },
@@ -105,8 +90,6 @@ static const struct reg_default cs42l42_reg_defaults[] = {
 	{ CS42L42_PLL_CTL3,			0x10 },
 	{ CS42L42_PLL_CAL_RATIO,		0x80 },
 	{ CS42L42_PLL_CTL4,			0x03 },
-	{ CS42L42_LOAD_DET_RCSTAT,		0x00 },
-	{ CS42L42_LOAD_DET_DONE,		0x00 },
 	{ CS42L42_LOAD_DET_EN,			0x00 },
 	{ CS42L42_HSBIAS_SC_AUTOCTL,		0x03 },
 	{ CS42L42_WAKE_CTL,			0xC0 },
@@ -115,8 +98,6 @@ static const struct reg_default cs42l42_reg_defaults[] = {
 	{ CS42L42_MISC_DET_CTL,			0x03 },
 	{ CS42L42_MIC_DET_CTL1,			0x1F },
 	{ CS42L42_MIC_DET_CTL2,			0x2F },
-	{ CS42L42_DET_STATUS1,			0x00 },
-	{ CS42L42_DET_STATUS2,			0x00 },
 	{ CS42L42_DET_INT1_MASK,		0xE0 },
 	{ CS42L42_DET_INT2_MASK,		0xFF },
 	{ CS42L42_HS_BIAS_CTL,			0xC2 },
@@ -130,7 +111,7 @@ static const struct reg_default cs42l42_reg_defaults[] = {
 	{ CS42L42_MIXER_CHA_VOL,		0x3F },
 	{ CS42L42_MIXER_ADC_VOL,		0x3F },
 	{ CS42L42_MIXER_CHB_VOL,		0x3F },
-	{ CS42L42_EQ_COEF_IN0,			0x22 },
+	{ CS42L42_EQ_COEF_IN0,			0x00 },
 	{ CS42L42_EQ_COEF_IN1,			0x00 },
 	{ CS42L42_EQ_COEF_IN2,			0x00 },
 	{ CS42L42_EQ_COEF_IN3,			0x00 },
@@ -182,7 +163,6 @@ static const struct reg_default cs42l42_reg_defaults[] = {
 	{ CS42L42_ASP_RX_DAI1_CH2_AP_RES,	0x03 },
 	{ CS42L42_ASP_RX_DAI1_CH2_BIT_MSB,	0x00 },
 	{ CS42L42_ASP_RX_DAI1_CH2_BIT_LSB,	0x00 },
-	{ CS42L42_SUB_REVID,			0x03 },
 };
 
 static bool cs42l42_readable_register(struct device *dev, unsigned int reg)
@@ -845,11 +825,10 @@ static int cs42l42_pcm_hw_params(struct snd_pcm_substream *substream,
 
 	switch(substream->stream) {
 	case SNDRV_PCM_STREAM_CAPTURE:
-		if (channels == 2) {
-			val |= CS42L42_ASP_TX_CH2_AP_MASK;
-			val |= width << CS42L42_ASP_TX_CH2_RES_SHIFT;
-		}
-		val |= width << CS42L42_ASP_TX_CH1_RES_SHIFT;
+		/* channel 2 on high LRCLK */
+		val = CS42L42_ASP_TX_CH2_AP_MASK |
+		      (width << CS42L42_ASP_TX_CH2_RES_SHIFT) |
+		      (width << CS42L42_ASP_TX_CH1_RES_SHIFT);
 
 		snd_soc_component_update_bits(component, CS42L42_ASP_TX_CH_AP_RES,
 				CS42L42_ASP_TX_CH1_AP_MASK | CS42L42_ASP_TX_CH2_AP_MASK |
@@ -1674,12 +1653,15 @@ static void cs42l42_setup_hs_type_detect(struct cs42l42_private *cs42l42)
 			(1 << CS42L42_HS_CLAMP_DISABLE_SHIFT));
 
 	/* Enable the tip sense circuit */
+	regmap_update_bits(cs42l42->regmap, CS42L42_TSENSE_CTL,
+			   CS42L42_TS_INV_MASK, CS42L42_TS_INV_MASK);
+
 	regmap_update_bits(cs42l42->regmap, CS42L42_TIPSENSE_CTL,
 			CS42L42_TIP_SENSE_CTRL_MASK |
 			CS42L42_TIP_SENSE_INV_MASK |
 			CS42L42_TIP_SENSE_DEBOUNCE_MASK,
 			(3 << CS42L42_TIP_SENSE_CTRL_SHIFT) |
-			(0 << CS42L42_TIP_SENSE_INV_SHIFT) |
+			(!cs42l42->ts_inv << CS42L42_TIP_SENSE_INV_SHIFT) |
 			(2 << CS42L42_TIP_SENSE_DEBOUNCE_SHIFT));
 
 	/* Save the initial status of the tip sense */
@@ -1722,10 +1704,6 @@ static int cs42l42_handle_device_data(struct device *dev,
 	} else {
 		cs42l42->ts_inv = CS42L42_TS_INV_DIS;
 	}
-
-	regmap_update_bits(cs42l42->regmap, CS42L42_TSENSE_CTL,
-			CS42L42_TS_INV_MASK,
-			(cs42l42->ts_inv << CS42L42_TS_INV_SHIFT));
 
 	ret = device_property_read_u32(dev, "cirrus,ts-dbnc-rise", &val);
 	if (!ret) {
@@ -1937,8 +1915,9 @@ static int cs42l42_i2c_probe(struct i2c_client *i2c_client,
 			NULL, cs42l42_irq_thread,
 			IRQF_ONESHOT | IRQF_TRIGGER_LOW,
 			"cs42l42", cs42l42);
-
-	if (ret != 0)
+	if (ret == -EPROBE_DEFER)
+		goto err_disable;
+	else if (ret != 0)
 		dev_err(&i2c_client->dev,
 			"Failed to request IRQ: %d\n", ret);
 
