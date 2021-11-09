@@ -4,6 +4,7 @@
  */
 
 #include <linux/types.h>
+#include <linux/kthread.h>
 #include <linux/errno.h>
 #include <linux/tty.h>
 #include <linux/tty_driver.h>
@@ -497,7 +498,7 @@ receive_buf(struct tty_port *port, struct tty_buffer *head, int count)
  *		 'consumer'
  */
 
-static void flush_to_ldisc(struct work_struct *work)
+static void flush_to_ldisc(struct kthread_work *work)
 {
 	struct tty_port *port = container_of(work, struct tty_port, buf.work);
 	struct tty_bufhead *buf = &port->buf;
@@ -557,10 +558,16 @@ void tty_flip_buffer_push(struct tty_port *port)
 }
 EXPORT_SYMBOL(tty_flip_buffer_push);
 
+static DEFINE_KTHREAD_WORKER(tty_buffer_worker);
+
 bool tty_buffer_queue_work(struct tty_port *port)
 {
-	struct tty_bufhead *buf = &port->buf;
-	return schedule_work(&buf->work);
+	return kthread_queue_work(&tty_buffer_worker, &port->buf.work);
+}
+
+void tty_buffer_init_kthread(void)
+{
+	kthread_run(kthread_worker_fn, &tty_buffer_worker, "tty");
 }
 
 /**
@@ -582,7 +589,7 @@ void tty_buffer_init(struct tty_port *port)
 	init_llist_head(&buf->free);
 	atomic_set(&buf->mem_used, 0);
 	atomic_set(&buf->priority, 0);
-	INIT_WORK(&buf->work, flush_to_ldisc);
+	kthread_init_work(&buf->work, flush_to_ldisc);
 	buf->mem_limit = TTYB_DEFAULT_MEM_LIMIT;
 }
 
@@ -614,12 +621,12 @@ bool tty_buffer_restart_work(struct tty_port *port)
 	return tty_buffer_queue_work(port);
 }
 
-bool tty_buffer_cancel_work(struct tty_port *port)
+void tty_buffer_cancel_work(struct tty_port *port)
 {
-	return cancel_work_sync(&port->buf.work);
+	tty_buffer_flush_work(port);
 }
 
 void tty_buffer_flush_work(struct tty_port *port)
 {
-	flush_work(&port->buf.work);
+	kthread_flush_work(&port->buf.work);
 }
