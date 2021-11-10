@@ -544,6 +544,8 @@ static struct bpf_map *prog_array_map_alloc(union bpf_attr *attr)
 	if (!aux)
 		return ERR_PTR(-ENOMEM);
 
+	spin_lock_init(&aux->owner.lock);
+
 	map = array_map_alloc(attr);
 	if (IS_ERR(map)) {
 		kfree(aux);
