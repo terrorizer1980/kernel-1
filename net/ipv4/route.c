@@ -157,6 +157,8 @@ static struct neighbour *ipv4_neigh_lookup(const struct dst_entry *dst,
 					   const void *daddr);
 static void ipv4_confirm_neigh(const struct dst_entry *dst, const void *daddr);
 
+static void rt_add_uncached_list(struct rtable *rt);
+
 static struct dst_ops ipv4_dst_ops = {
 	.family =		AF_INET,
 	.check =		ipv4_dst_check,
@@ -1449,7 +1451,7 @@ static bool rt_cache_route(struct fib_nh *nh, struct rtable *rt)
 	prev = cmpxchg(p, orig, rt);
 	if (prev == orig) {
 		if (orig) {
-			dst_dev_put(&orig->dst);
+			rt_add_uncached_list(orig);
 			dst_release(&orig->dst);
 		}
 	} else {
