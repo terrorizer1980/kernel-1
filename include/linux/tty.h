@@ -513,6 +513,7 @@ extern void session_clear_tty(struct pid *session);
 extern void no_tty(void);
 extern void tty_buffer_free_all(struct tty_port *port);
 extern void tty_buffer_flush(struct tty_struct *tty, struct tty_ldisc *ld);
+extern bool tty_buffer_queue_work(struct tty_port *port);
 extern void tty_buffer_init(struct tty_port *port);
 extern void tty_buffer_set_lock_subclass(struct tty_port *port);
 extern bool tty_buffer_restart_work(struct tty_port *port);
