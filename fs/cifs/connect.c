@@ -107,7 +107,7 @@ enum {
 	Opt_cruid, Opt_gid, Opt_file_mode,
 	Opt_dirmode, Opt_port,
 	Opt_min_enc_offload,
-	Opt_blocksize, Opt_rsize, Opt_wsize, Opt_actimeo,
+	Opt_blocksize, Opt_rsize, Opt_wsize, Opt_actimeo, Opt_acdirmax,
 	Opt_echo_interval, Opt_max_credits, Opt_handletimeout,
 	Opt_snapshot,
 
@@ -218,6 +218,7 @@ static const match_table_t cifs_mount_option_tokens = {
 	{ Opt_rsize, "rsize=%s" },
 	{ Opt_wsize, "wsize=%s" },
 	{ Opt_actimeo, "actimeo=%s" },
+	{ Opt_acdirmax, "acdirmax=%s" },
 	{ Opt_handletimeout, "handletimeout=%s" },
 	{ Opt_echo_interval, "echo_interval=%s" },
 	{ Opt_max_credits, "max_credits=%s" },
@@ -1675,6 +1676,7 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 	vol->strict_io = true;
 
 	vol->actimeo = CIFS_DEF_ACTIMEO;
+	vol->acdirmax = CIFS_DEF_ACTIMEO;
 
 	/* Most clients set timeout to 0, allows server to use its default */
 	vol->handle_timeout = 0; /* See MS-SMB2 spec section 2.2.14.2.12 */
@@ -2099,6 +2101,18 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 			vol->actimeo = HZ * option;
 			if (vol->actimeo > CIFS_MAX_ACTIMEO) {
 				cifs_dbg(VFS, "attribute cache timeout too large\n");
+				goto cifs_parse_mount_err;
+			}
+			break;
+		case Opt_acdirmax:
+			if (get_option_ul(args, &option)) {
+				cifs_dbg(VFS, "%s: Invalid acdirmax value\n",
+					 __func__);
+				goto cifs_parse_mount_err;
+			}
+			vol->acdirmax = HZ * option;
+			if (vol->acdirmax > CIFS_MAX_ACTIMEO) {
+				cifs_dbg(VFS, "acdirmax too large\n");
 				goto cifs_parse_mount_err;
 			}
 			break;
@@ -3668,6 +3682,8 @@ compare_mount_options(struct super_block *sb, struct cifs_mnt_data *mnt_data)
 		return 0;
 
 	if (old->actimeo != new->actimeo)
+		return 0;
+	if (old->acdirmax != new->acdirmax)
 		return 0;
 
 	return 1;

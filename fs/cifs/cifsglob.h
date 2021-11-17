@@ -613,7 +613,8 @@ struct smb_vol {
 	unsigned int wsize;
 	unsigned int min_offload;
 	bool sockopt_tcp_nodelay:1;
-	unsigned long actimeo; /* attribute cache timeout (jiffies) */
+	unsigned long actimeo; /* attribute cache timeout for files (jiffies) */
+	unsigned long acdirmax; /* attribute cache timeout for directories (jiffies) */
 	struct smb_version_operations *ops;
 	struct smb_version_values *vals;
 	char *prepath;

@@ -65,7 +65,8 @@ struct cifs_sb_info {
 	unsigned int bsize;
 	unsigned int rsize;
 	unsigned int wsize;
-	unsigned long actimeo; /* attribute cache timeout (jiffies) */
+	unsigned long actimeo; /* attribute cache timeout for files (jiffies) */
+	unsigned long acdirmax; /* attribute cache timeout for directories (jiffies) */
 	atomic_t active;
 	kuid_t	mnt_uid;
 	kgid_t	mnt_gid;
