@@ -2042,10 +2042,10 @@ cifs_dentry_needs_reval(struct dentry *dentry)
 				   cifs_i->time + cifs_sb->acdirmax))
 			return true;
 	} else { /* file */
-		if (!cifs_sb->actimeo)
+		if (!cifs_sb->acregmax)
 			return true;
 		if (!time_in_range(jiffies, cifs_i->time,
-				   cifs_i->time + cifs_sb->actimeo))
+				   cifs_i->time + cifs_sb->acregmax))
 			return true;
 	}
 

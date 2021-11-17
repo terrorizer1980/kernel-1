@@ -623,9 +623,18 @@ cifs_show_options(struct seq_file *s, struct dentry *root)
 		seq_printf(s, ",snapshot=%llu", tcon->snapshot_time);
 	if (tcon->handle_timeout)
 		seq_printf(s, ",handletimeout=%u", tcon->handle_timeout);
-	/* convert actimeo and directory attribute timeout and display in seconds */
-	seq_printf(s, ",actimeo=%lu", cifs_sb->actimeo / HZ);
-	seq_printf(s, ",acdirmax=%lu", cifs_sb->acdirmax / HZ);
+
+	/*
+	 * Display file and directory attribute timeout in seconds.
+	 * If file and directory attribute timeout the same then actimeo
+	 * was likely specified on mount
+	 */
+	if (cifs_sb->acdirmax == cifs_sb->acregmax)
+		seq_printf(s, ",actimeo=%lu", cifs_sb->acregmax / HZ);
+	else {
+		seq_printf(s, ",acdirmax=%lu", cifs_sb->acdirmax / HZ);
+		seq_printf(s, ",acregmax=%lu", cifs_sb->acregmax / HZ);
+	}
 
 	return 0;
 }

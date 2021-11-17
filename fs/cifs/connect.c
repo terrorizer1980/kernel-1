@@ -107,7 +107,7 @@ enum {
 	Opt_cruid, Opt_gid, Opt_file_mode,
 	Opt_dirmode, Opt_port,
 	Opt_min_enc_offload,
-	Opt_blocksize, Opt_rsize, Opt_wsize, Opt_actimeo, Opt_acdirmax,
+	Opt_blocksize, Opt_rsize, Opt_wsize, Opt_actimeo, Opt_acdirmax, Opt_acregmax,
 	Opt_echo_interval, Opt_max_credits, Opt_handletimeout,
 	Opt_snapshot,
 
@@ -1675,7 +1675,7 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 	/* default is to use strict cifs caching semantics */
 	vol->strict_io = true;
 
-	vol->actimeo = CIFS_DEF_ACTIMEO;
+	vol->acregmax = CIFS_DEF_ACTIMEO;
 	vol->acdirmax = CIFS_DEF_ACTIMEO;
 
 	/* Most clients set timeout to 0, allows server to use its default */
@@ -2092,17 +2092,34 @@ cifs_parse_mount_options(const char *mountdata, const char *devname,
 			}
 			vol->wsize = option;
 			break;
+		case Opt_acregmax:
+			if (get_option_ul(args, &option)) {
+				cifs_dbg(VFS, "%s: Invalid acregmax value\n",
+					 __func__);
+				goto cifs_parse_mount_err;
+			}
+			vol->acregmax = HZ * option;
+			if (vol->acregmax > CIFS_MAX_ACTIMEO) {
+				cifs_dbg(VFS, "acregmax too large\n");
+				goto cifs_parse_mount_err;
+			}
+			break;
 		case Opt_actimeo:
 			if (get_option_ul(args, &option)) {
 				cifs_dbg(VFS, "%s: Invalid actimeo value\n",
 					 __func__);
 				goto cifs_parse_mount_err;
 			}
-			vol->actimeo = HZ * option;
-			if (vol->actimeo > CIFS_MAX_ACTIMEO) {
+			if (HZ * option > CIFS_MAX_ACTIMEO) {
 				cifs_dbg(VFS, "attribute cache timeout too large\n");
 				goto cifs_parse_mount_err;
 			}
+			if ((vol->acdirmax != CIFS_DEF_ACTIMEO) ||
+			    (vol->acregmax != CIFS_DEF_ACTIMEO)) {
+				cifs_dbg(VFS, "actimeo ignored since acregmax or acdirmax specified\n");
+				break;
+			}
+			vol->acdirmax = vol->acregmax = HZ * option;
 			break;
 		case Opt_acdirmax:
 			if (get_option_ul(args, &option)) {
@@ -3681,7 +3698,7 @@ compare_mount_options(struct super_block *sb, struct cifs_mnt_data *mnt_data)
 	if (strcmp(old->local_nls->charset, new->local_nls->charset))
 		return 0;
 
-	if (old->actimeo != new->actimeo)
+	if (old->acregmax != new->acregmax)
 		return 0;
 	if (old->acdirmax != new->acdirmax)
 		return 0;
@@ -4145,7 +4162,8 @@ int cifs_setup_cifs_sb(struct smb_vol *pvolume_info,
 	cifs_dbg(FYI, "file mode: %04ho  dir mode: %04ho\n",
 		 cifs_sb->mnt_file_mode, cifs_sb->mnt_dir_mode);
 
-	cifs_sb->actimeo = pvolume_info->actimeo;
+	cifs_sb->acregmax = pvolume_info->acregmax;
+	cifs_sb->acdirmax = pvolume_info->acdirmax;
 	cifs_sb->local_nls = pvolume_info->local_nls;
 
 	if (pvolume_info->nodfs)
