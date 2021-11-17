@@ -91,7 +91,6 @@ static int rtw89_fw_hdr_parser(struct rtw89_dev *rtwdev, const u8 *fw, u32 len,
 	info->section_num = GET_FW_HDR_SEC_NUM(fw);
 	info->hdr_len = RTW89_FW_HDR_SIZE +
 			info->section_num * RTW89_FW_SECTION_HDR_SIZE;
-	SET_FW_HDR_PART_SIZE(fw, FWDL_SECTION_PER_PKT_LEN);
 
 	bin = fw + info->hdr_len;
 
@@ -124,8 +123,8 @@ int rtw89_mfw_recognize(struct rtw89_dev *rtwdev, enum rtw89_fw_type type,
 			struct rtw89_fw_suit *fw_suit)
 {
 	struct rtw89_fw_info *fw_info = &rtwdev->fw;
-	const u8 *mfw = fw_info->firmware;
-	u32 mfw_len = fw_info->firmware_size;
+	const u8 *mfw = fw_info->firmware->data;
+	u32 mfw_len = fw_info->firmware->size;
 	const struct rtw89_mfw_hdr *mfw_hdr = (const struct rtw89_mfw_hdr *)mfw;
 	const struct rtw89_mfw_info *mfw_info;
 	int i;
@@ -275,6 +274,7 @@ static int __rtw89_fw_download_hdr(struct rtw89_dev *rtwdev, const u8 *fw, u32 l
 	}
 
 	skb_put_data(skb, fw, len);
+	SET_FW_HDR_PART_SIZE(skb->data, FWDL_SECTION_PER_PKT_LEN);
 	rtw89_h2c_pkt_set_hdr_fwdl(rtwdev, skb, FWCMD_TYPE_H2C,
 				   H2C_CAT_MAC, H2C_CL_MAC_FWDL,
 				   H2C_FUNC_MAC_FWHDR_DL, len);
@@ -489,10 +489,7 @@ static void rtw89_load_firmware_cb(const struct firmware *firmware, void *contex
 		return;
 	}
 
-	fw->firmware = vmalloc(firmware->size);
-	if (fw->firmware)
-		memcpy((void *)fw->firmware, firmware->data, firmware->size);
-	release_firmware(firmware);
+	fw->firmware = firmware;
 	complete_all(&fw->completion);
 }
 
@@ -521,10 +518,8 @@ void rtw89_unload_firmware(struct rtw89_dev *rtwdev)
 
 	rtw89_wait_firmware_completion(rtwdev);
 
-	if (fw->firmware) {
-		vfree(fw->firmware);
-		fw->firmware = NULL;
-	}
+	if (fw->firmware)
+		release_firmware(fw->firmware);
 }
 
 #define H2C_CAM_LEN 60
