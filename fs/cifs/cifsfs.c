@@ -685,9 +685,16 @@ static int cifs_show_stats(struct seq_file *s, struct dentry *root)
 
 static int cifs_remount(struct super_block *sb, int *flags, char *data)
 {
+	int rc = 0;
+	struct cifs_sb_info *cifs_sb = CIFS_SB(sb);
+
 	sync_filesystem(sb);
 	*flags |= MS_NODIRATIME;
-	return 0;
+
+#ifdef CONFIG_CIFS_DFS_UPCALL
+	rc = dfs_cache_remount_fs(cifs_sb);
+#endif
+	return rc;
 }
 
 static int cifs_drop_inode(struct inode *inode)
