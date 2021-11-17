@@ -2031,13 +2031,23 @@ cifs_dentry_needs_reval(struct dentry *dentry)
 		mutex_unlock(&cfid->fid_mutex);
 		close_cached_dir(cfid);
 	}
-
-	if (!cifs_sb->actimeo)
-		return true;
-
-	if (!time_in_range(jiffies, cifs_i->time,
-				cifs_i->time + cifs_sb->actimeo))
-		return true;
+	/*
+	 * depending on inode type, check if attribute caching disabled for
+	 * files or directories
+	 */
+	if (S_ISDIR(inode->i_mode)) {
+		if (!cifs_sb->acdirmax)
+			return true;
+		if (!time_in_range(jiffies, cifs_i->time,
+				   cifs_i->time + cifs_sb->acdirmax))
+			return true;
+	} else { /* file */
+		if (!cifs_sb->actimeo)
+			return true;
+		if (!time_in_range(jiffies, cifs_i->time,
+				   cifs_i->time + cifs_sb->actimeo))
+			return true;
+	}
 
 	/* hardlinked files w/ noserverino get "special" treatment */
 	if (!(cifs_sb->mnt_cifs_flags & CIFS_MOUNT_SERVER_INUM) &&
