@@ -23,7 +23,7 @@
 #include "l3ni1.h"
 #include <linux/ctype.h>
 #include <linux/slab.h>
-#include <linux/nospec>
+#include <linux/nospec.h>
 
 extern char *HiSax_getrev(const char *revision);
 static const char *ni1_revision = "$Revision: 2.8.2.3 $";
