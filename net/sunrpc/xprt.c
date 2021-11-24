@@ -993,6 +993,9 @@ bool xprt_prepare_transmit(struct rpc_task *task)
 		task->tk_status = -EAGAIN;
 		goto out_unlock;
 	}
+	if (atomic_read(&xprt->swapper))
+		/* This will be clear in __rpc_execute */
+		current->flags |= PF_MEMALLOC;
 	ret = true;
 out_unlock:
 	spin_unlock_bh(&xprt->transport_lock);
