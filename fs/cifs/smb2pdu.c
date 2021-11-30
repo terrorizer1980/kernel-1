@@ -172,7 +172,11 @@ smb2_reconnect(__le16 smb2_command, struct cifs_tcon *tcon)
 	if (tcon == NULL)
 		return 0;
 
-	if (smb2_command == SMB2_TREE_CONNECT)
+	/*
+	 * Need to also skip SMB2_IOCTL because it is used for checking nested dfs links in
+	 * cifs_tree_connect().
+	 */
+	if (smb2_command == SMB2_TREE_CONNECT || smb2_command == SMB2_IOCTL)
 		return 0;
 
 	if (tcon->tidStatus == CifsExiting) {
@@ -1698,7 +1702,7 @@ SMB2_tcon(const unsigned int xid, struct cifs_ses *ses, const char *tree,
 	cifs_small_buf_release(req);
 	rsp = (struct smb2_tree_connect_rsp *)rsp_iov.iov_base;
 	trace_smb3_tcon(xid, tcon->tid, ses->Suid, tree, rc);
-	if (rc != 0) {
+	if ((rc != 0) || (rsp == NULL)) {
 		if (tcon) {
 			cifs_stats_fail_inc(tcon, SMB2_TREE_CONNECT_HE);
 			tcon->need_reconnect = true;
@@ -2253,7 +2257,7 @@ create_sd_buf(umode_t mode, bool set_owner, unsigned int *len)
 	buf->sd.OffsetDacl = cpu_to_le32(ptr - (__u8 *)&buf->sd);
 	/* Ship the ACL for now. we will copy it into buf later. */
 	aclptr = ptr;
-	ptr += sizeof(struct cifs_acl);
+	ptr += sizeof(struct smb3_acl);
 
 	/* create one ACE to hold the mode embedded in reserved special SID */
 	acelen = setup_special_mode_ACE((struct cifs_ace *)ptr, (__u64)mode);
@@ -2278,7 +2282,7 @@ create_sd_buf(umode_t mode, bool set_owner, unsigned int *len)
 	acl.AclRevision = ACL_REVISION; /* See 2.4.4.1 of MS-DTYP */
 	acl.AclSize = cpu_to_le16(acl_size);
 	acl.AceCount = cpu_to_le16(ace_count);
-	memcpy(aclptr, &acl, sizeof(struct cifs_acl));
+	memcpy(aclptr, &acl, sizeof(struct smb3_acl));
 
 	buf->ccontext.DataLength = cpu_to_le32(ptr - (__u8 *)&buf->sd);
 	*len = roundup(ptr - (__u8 *)buf, 8);
@@ -2794,7 +2798,9 @@ SMB2_open(const unsigned int xid, struct cifs_open_parms *oparms, __le16 *path,
 			tcon->need_reconnect = true;
 		}
 		goto creat_exit;
-	} else
+	} else if (rsp == NULL) /* unlikely to happen, but safer to check */
+		goto creat_exit;
+	else
 		trace_smb3_open_done(xid, rsp->PersistentFileId, tcon->tid,
 				     ses->Suid, oparms->create_options,
 				     oparms->desired_access);
@@ -3009,6 +3015,16 @@ SMB2_ioctl(const unsigned int xid, struct cifs_tcon *tcon, u64 persistent_fid,
 	/* check if caller wants to look at return data or just return rc */
 	if ((plen == NULL) || (out_data == NULL))
 		goto ioctl_exit;
+
+	/*
+	 * Although unlikely to be possible for rsp to be null and rc not set,
+	 * adding check below is slightly safer long term (and quiets Coverity
+	 * warning)
+	 */
+	if (rsp == NULL) {
+		rc = -EIO;
+		goto ioctl_exit;
+	}
 
 	*plen = le32_to_cpu(rsp->OutputCount);
 
