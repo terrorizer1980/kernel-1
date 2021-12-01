@@ -214,6 +214,7 @@ static int __irq_startup(struct irq_desc *desc)
 
 int irq_startup(struct irq_desc *desc, bool resend)
 {
+	struct irq_data *d = irq_desc_get_irq_data(desc);
 	int ret = 0;
 
 	desc->depth = 0;
@@ -221,8 +222,11 @@ int irq_startup(struct irq_desc *desc, bool resend)
 	if (irqd_is_started(&desc->irq_data)) {
 		irq_enable(desc);
 	} else {
+		if (d->chip->flags & IRQCHIP_AFFINITY_PRE_STARTUP)
+			irq_setup_affinity(desc);
 		ret = __irq_startup(desc);
-		irq_setup_affinity(desc);
+		if (!(d->chip->flags & IRQCHIP_AFFINITY_PRE_STARTUP))
+			irq_setup_affinity(desc);
 	}
 	if (resend)
 		check_irq_resend(desc);
