@@ -2710,10 +2710,8 @@ static int match_server(struct TCP_Server_Info *server, struct smb_vol *vol)
 {
 	struct sockaddr *addr = (struct sockaddr *)&vol->dstaddr;
 
-	if (vol->nosharesock) {
-		server->nosharesock = true;
+	if (vol->nosharesock)
 		return 0;
-	}
 
 	/* this server does not share socket */
 	if (server->nosharesock)
@@ -2864,6 +2862,9 @@ cifs_get_tcp_session(struct smb_vol *volume_info)
 		rc = -ENOMEM;
 		goto out_err;
 	}
+
+	if (volume_info->nosharesock)
+		tcp_ses->nosharesock = true;
 
 	tcp_ses->ops = volume_info->ops;
 	tcp_ses->vals = volume_info->vals;
