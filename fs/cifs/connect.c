@@ -2710,10 +2710,8 @@ static int match_server(struct TCP_Server_Info *server, struct smb_vol *vol)
 {
 	struct sockaddr *addr = (struct sockaddr *)&vol->dstaddr;
 
-	if (vol->nosharesock) {
-		server->nosharesock = true;
+	if (vol->nosharesock)
 		return 0;
-	}
 
 	/* this server does not share socket */
 	if (server->nosharesock)
@@ -2864,6 +2862,9 @@ cifs_get_tcp_session(struct smb_vol *volume_info)
 		rc = -ENOMEM;
 		goto out_err;
 	}
+
+	if (volume_info->nosharesock)
+		tcp_ses->nosharesock = true;
 
 	tcp_ses->ops = volume_info->ops;
 	tcp_ses->vals = volume_info->vals;
@@ -4835,6 +4836,7 @@ static int connect_dfs_root(struct mount_ctx *mnt_ctx, struct dfs_cache_tgt_list
 	 */
 	mount_put_conns(mnt_ctx);
 	mount_get_dfs_conns(mnt_ctx);
+	set_root_ses(mnt_ctx);
 
 	full_path = build_unc_path_to_root(ctx, cifs_sb, true);
 	if (IS_ERR(full_path))
