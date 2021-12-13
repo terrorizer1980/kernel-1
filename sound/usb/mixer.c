@@ -362,9 +362,8 @@ static int get_ctl_value_v2(struct usb_mixer_elem_info *cval, int request,
 
 	memset(buf, 0, sizeof(buf));
 
-	ret = snd_usb_lock_shutdown(chip) ? -EIO : 0;
-	if (ret)
-		goto error;
+	if (snd_usb_lock_shutdown(chip))
+		return -EIO;
 
 	idx = mixer_ctrl_intf(cval->head.mixer) | (cval->head.id << 8);
 	ret = snd_usb_ctl_msg(chip->dev, usb_rcvctrlpipe(chip->dev, 0), bRequest,
@@ -373,8 +372,7 @@ static int get_ctl_value_v2(struct usb_mixer_elem_info *cval, int request,
 	snd_usb_unlock_shutdown(chip);
 
 	if (ret < 0) {
-error:
-		usb_audio_err(chip,
+		usb_audio_dbg(chip,
 			"cannot get ctl value: req = %#x, wValue = %#x, wIndex = %#x, type = %d\n",
 			request, validx, idx, cval->val_type);
 		return ret;
@@ -1199,7 +1197,32 @@ static void volume_control_quirks(struct usb_mixer_elem_info *cval,
 			cval->res = 1;
 		}
 		break;
+	case USB_ID(0x1224, 0x2a25): /* Jieli Technology USB PHY 2.0 */
+		if (!strcmp(kctl->id.name, "Mic Capture Volume")) {
+			usb_audio_info(chip,
+				"set resolution quirk: cval->res = 16\n");
+			cval->res = 16;
+		}
+		break;
 	}
+}
+
+/* forcibly initialize the current mixer value; if GET_CUR fails, set to
+ * the minimum as default
+ */
+static void init_cur_mix_raw(struct usb_mixer_elem_info *cval, int ch, int idx)
+{
+	int val, err;
+
+	err = snd_usb_get_cur_mix_value(cval, ch, idx, &val);
+	if (!err)
+		return;
+	if (!cval->head.mixer->ignore_ctl_error)
+		usb_audio_warn(cval->head.mixer->chip,
+			       "%d:%d: failed to get current value for ch %d (%d)\n",
+			       cval->head.id, mixer_ctrl_intf(cval->head.mixer),
+			       ch, err);
+	snd_usb_set_cur_mix_value(cval, ch, idx, cval->min);
 }
 
 /*
@@ -1208,6 +1231,8 @@ static void volume_control_quirks(struct usb_mixer_elem_info *cval,
 static int get_min_max_with_quirks(struct usb_mixer_elem_info *cval,
 				   int default_min, struct snd_kcontrol *kctl)
 {
+	int i, idx;
+
 	/* for failsafe */
 	cval->min = default_min;
 	cval->max = cval->min + 1;
@@ -1220,7 +1245,6 @@ static int get_min_max_with_quirks(struct usb_mixer_elem_info *cval,
 	} else {
 		int minchn = 0;
 		if (cval->cmask) {
-			int i;
 			for (i = 0; i < MAX_CHANNELS; i++)
 				if (cval->cmask & (1 << i)) {
 					minchn = i + 1;
@@ -1318,6 +1342,19 @@ no_res_check:
 				       cval->head.id, mixer_ctrl_intf(cval->head.mixer),
 				       cval->dBmin, cval->dBmax);
 			cval->dBmin = cval->dBmax = 0;
+		}
+	}
+
+	/* initialize all elements */
+	if (!cval->cmask) {
+		init_cur_mix_raw(cval, 0, 0);
+	} else {
+		idx = 0;
+		for (i = 0; i < MAX_CHANNELS; i++) {
+			if (cval->cmask & (1 << i)) {
+				init_cur_mix_raw(cval, i + 1, idx);
+				idx++;
+			}
 		}
 	}
 
@@ -1573,9 +1610,9 @@ static size_t append_ctl_name(struct snd_kcontrol *kctl, const char *str)
 static void check_no_speaker_on_headset(struct snd_kcontrol *kctl,
 					struct snd_card *card)
 {
-	const char *names_to_check[] = {
+	static const char * const names_to_check[] = {
 		"Headset", "headset", "Headphone", "headphone", NULL};
-	const char **s;
+	const char * const *s;
 	bool found = false;
 
 	if (strcmp("Speaker", kctl->id.name))
@@ -3184,7 +3221,6 @@ static int snd_usb_mixer_controls(struct usb_mixer_interface *mixer)
 			state.map = map->map;
 			state.selector_map = map->selector_map;
 			mixer->connector_map = map->connector_map;
-			mixer->ignore_ctl_error |= map->ignore_ctl_error;
 			break;
 		}
 	}
@@ -3543,8 +3579,7 @@ static int create_keep_iface_ctl(struct usb_mixer_interface *mixer)
 	return snd_ctl_add(mixer->chip->card, kctl);
 }
 
-int snd_usb_create_mixer(struct snd_usb_audio *chip, int ctrlif,
-			 int ignore_error)
+int snd_usb_create_mixer(struct snd_usb_audio *chip, int ctrlif)
 {
 	static const struct snd_device_ops dev_ops = {
 		.dev_free = snd_usb_mixer_dev_free
@@ -3558,7 +3593,7 @@ int snd_usb_create_mixer(struct snd_usb_audio *chip, int ctrlif,
 	if (!mixer)
 		return -ENOMEM;
 	mixer->chip = chip;
-	mixer->ignore_ctl_error = ignore_error;
+	mixer->ignore_ctl_error = !!(chip->quirk_flags & QUIRK_FLAG_IGNORE_CTL_ERROR);
 	mixer->id_elems = kcalloc(MAX_ID_ELEMS, sizeof(*mixer->id_elems),
 				  GFP_KERNEL);
 	if (!mixer->id_elems) {

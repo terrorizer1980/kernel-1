@@ -644,7 +644,6 @@ static void destroy_sched_domains(struct sched_domain *sd)
 DEFINE_PER_CPU(struct sched_domain __rcu *, sd_llc);
 DEFINE_PER_CPU(int, sd_llc_size);
 DEFINE_PER_CPU(int, sd_llc_id);
-DEFINE_PER_CPU(int, sd_numaimb_shift);
 DEFINE_PER_CPU(struct sched_domain_shared __rcu *, sd_llc_shared);
 DEFINE_PER_CPU(struct sched_domain __rcu *, sd_numa);
 DEFINE_PER_CPU(struct sched_domain __rcu *, sd_asym_packing);
@@ -672,20 +671,6 @@ static void update_top_cache_domain(int cpu)
 
 	sd = lowest_flag_domain(cpu, SD_NUMA);
 	rcu_assign_pointer(per_cpu(sd_numa, cpu), sd);
-
-	/*
-	 * Save the threshold where an imbalance is allowed between SD_NUMA
-	 * domains. If LLC spans the entire node, then imbalances are allowed
-	 * until 25% of the domain is active. Otherwise, allow an imbalance
-	 * up to the point where LLCs between NUMA nodes should be balanced
-	 * to maximise cache and memory bandwidth utilisation.
-	 */
-	if (sd) {
-		if (sd->span_weight == size)
-			per_cpu(sd_numaimb_shift, cpu) = 2;
-		else
-			per_cpu(sd_numaimb_shift, cpu) = max(2, ilog2(sd->span_weight / size * num_online_nodes()));
-	}
 
 	sd = highest_flag_domain(cpu, SD_ASYM_PACKING);
 	rcu_assign_pointer(per_cpu(sd_asym_packing, cpu), sd);
@@ -2253,6 +2238,43 @@ build_sched_domains(const struct cpumask *cpu_map, struct sched_domain_attr *att
 			} else {
 				if (build_sched_groups(sd, i))
 					goto error;
+			}
+		}
+	}
+
+	/*
+	 * Calculate an allowed NUMA imbalance such that LLCs do not get
+	 * imbalanced.
+	 */
+	for_each_cpu(i, cpu_map) {
+		unsigned int imb = 0;
+		unsigned int imb_span = 1;
+
+		for (sd = *per_cpu_ptr(d.sd, i); sd; sd = sd->parent) {
+			struct sched_domain *child = sd->child;
+
+			if (!(sd->flags & SD_SHARE_PKG_RESOURCES) && child &&
+			    (child->flags & SD_SHARE_PKG_RESOURCES)) {
+				struct sched_domain *top = sd;
+				unsigned int llc_sq;
+
+				/*
+				 * nr_llcs = (top->span_weight / llc_weight);
+				 * imb = (child_weight / nr_llcs) >> 2
+				 *
+				 * is equivalent to
+				 *
+				 * imb = (llc_weight^2 / top->span_weight) >> 2
+				 *
+				 */
+				llc_sq = child->span_weight * child->span_weight;
+
+				imb = max(2U, ((llc_sq / top->span_weight) >> 2));
+				imb_span = sd->span_weight;
+
+				sd->imb_numa_nr = imb;
+			} else {
+				sd->imb_numa_nr = imb * (sd->span_weight / imb_span);
 			}
 		}
 	}
